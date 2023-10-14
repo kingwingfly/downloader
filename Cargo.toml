@@ -1,2 +1,14 @@
 [workspace]
 members = ["src-tauri"]
+resolver = "2"
+
+[workspace.package]
+name = "downloader"
+version = "0.1.0"
+description = ""
+authors = ["Louis<836250617@qq.com>"]
+license = ""
+repository = ""
+default-run = "app"
+edition = "2021"
+rust-version = "1.70"
