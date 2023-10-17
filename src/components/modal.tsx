@@ -42,7 +42,7 @@ export default function Modal({ children }: { children: React.ReactNode }) {
         >
             <div
                 ref={wrapper}
-                className="inputcard bg-gray-100 shadow-sm border-dashed rounded-lg px-5 py-8"
+                className="inputcard bg-gray-100 dark:text-black shadow-sm border-dashed rounded-lg px-12 py-8"
             >
                 {children}
             </div>

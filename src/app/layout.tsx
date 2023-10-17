@@ -17,7 +17,7 @@ export default function RootLayout(
   return (
     <html lang="en">
       <body className={inter.className}>
-        <div className='home h-screen flex justify-center items-center'>
+        <div className='h-screen w-auto flex justify-center items-center'>
           {props.children}
           {props.modal}
         </div>
