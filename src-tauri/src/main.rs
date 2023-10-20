@@ -2,7 +2,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod config;
-mod error;
+mod model;
 mod task;
 mod tracing_helper;
 mod utils;

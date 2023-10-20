@@ -18,8 +18,13 @@ snafu = "0.7.5"
 url = "2.4.1"
 config = "0.13.3"
 tempdir = "0.3.7"
-tracing = "0.1.39"
+tracing = "0.1.40"
 tracing-subscriber = "0.3.17"
+scraper = "0.17.1"
+uuid = "1.4.1"
+tracing-test = "0.2.4"
+actix = "0.13.1"
+casey = "0.4.0"
 
 [features]
 # this feature is used for production builds or when `devPath` points to the filesystem and the built-in dev server is disabled.

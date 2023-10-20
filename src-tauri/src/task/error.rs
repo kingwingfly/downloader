@@ -1,5 +1,3 @@
-use std::io;
-
 use reqwest::Error as ReqwestError;
 use snafu::prelude::*;
 
@@ -14,13 +12,6 @@ pub enum TaskError {
     #[snafu(display("{}", source), context(false))]
     GetError {
         source: ReqwestError,
-    },
-    #[snafu(
-        display("Could not GET url: {:?}", std::env::temp_dir()),
-        context(false)
-    )]
-    IoError {
-        source: io::Error,
     },
     StatusError,
     UnknownTaskType,

@@ -12,3 +12,9 @@ repository = ""
 default-run = "app"
 edition = "2021"
 rust-version = "1.70"
+
+
+[profile.release]
+lto = true
+opt-level = 3
+codegen-units = 1
