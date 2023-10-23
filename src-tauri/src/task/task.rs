@@ -1,8 +1,9 @@
 use super::error::{parse_error, task_error, TaskResult};
-use crate::{config::APP_CONFIG, task::parser::Parser};
+use crate::config::get_config;
+use crate::task::parser::Parser;
 use async_recursion::async_recursion;
 use scraper::Html;
-use snafu::ResultExt;
+use snafu::{OptionExt, ResultExt};
 use tracing::{debug, info, instrument, Level};
 use url::Url;
 use uuid::Uuid;
@@ -62,7 +63,7 @@ impl Task {
             TaskType::BiliBili => {
                 let html = self.get_html().await?;
                 let child_tasks = Parser::html(html).bilibili()?;
-                debug_assert!(child_tasks.len() > 0);
+                debug_assert!(!child_tasks.is_empty());
                 Ok(child_tasks)
             }
             TaskType::Unknown => task_error::UnknownTaskType.fail()?,
@@ -93,8 +94,8 @@ impl TaskExe for Task {
     #[cfg_attr(test, instrument(level=Level::DEBUG, skip(self), fields(uuid=format!("<{:.5}...>", self.id.to_string()), rs), err))]
     async fn get_html(&self) -> TaskResult<Html> {
         // region get_resp
-        let user_agent = APP_CONFIG.get().unwrap().get_string("user-agent").unwrap();
-        let cookie = APP_CONFIG.get().unwrap().get_string("cookie").unwrap();
+        let user_agent = get_config("user-agent").context(task_error::ConfigNotFound)?;
+        let cookie = get_config("cookie").context(task_error::ConfigNotFound)?;
         let client = reqwest::Client::builder()
             .user_agent(user_agent)
             .build()
@@ -167,25 +168,25 @@ mod tests {
 
     #[tokio::test]
     async fn get_test() {
-        crate::config::config_init();
+        assert!(crate::config::config_init().is_ok());
         let task = Task::new("https://bilibili.com").unwrap();
         assert!(task.get_html().await.is_ok());
     }
 
     #[test]
     fn get_task_type_test() {
-        crate::config::config_init();
+        assert!(crate::config::config_init().is_ok());
         let task = Task::new("https://bilibili.com").unwrap();
         assert_eq!(task.get_task_type(), TaskType::BiliBili);
-        let task = Task::new("https://www.bilibili.com/video/BV1a84y127b4/?spm_id_from=333.1007.top_right_bar_window_history.content.click&vd_source=9ea481f2d8d2d522899fe515c8f472c8").unwrap();
+        let task = Task::new("https://www.bilibili.com/video/BV1NN411F7HE").unwrap();
         assert_eq!(task.get_task_type(), TaskType::BiliBili);
     }
 
     #[tracing_test::traced_test]
     #[tokio::test]
     async fn task_go_test() {
-        crate::config::config_init();
-        let task = Task::new("https://bilibili.com").unwrap();
+        assert!(crate::config::config_init().is_ok());
+        let task = Task::new("https://www.bilibili.com/video/BV1NN411F7HE").unwrap();
         assert!(task.go().await.is_ok());
     }
 }

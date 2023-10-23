@@ -17,6 +17,8 @@ pub enum TaskError {
     StatusError,
     #[snafu(context(suffix(false)))]
     UnknownTaskType,
+    #[snafu(context(suffix(false)))]
+    ConfigNotFound,
 }
 
 pub type TaskResult<T> = Result<T, TaskError>;
@@ -28,6 +30,8 @@ pub enum ParseError {
     NoTargetFound,
     #[snafu()]
     JsonParseError,
+    #[snafu(context(suffix(false)))]
+    BiliPlayInfoNotFound,
 }
 
 pub type ParseResult<T> = Result<T, ParseError>;

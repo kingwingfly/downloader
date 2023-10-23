@@ -16,19 +16,24 @@ impl Parser {
     pub fn bilibili(&self) -> ParseResult<Vec<Task>> {
         let mut ret = vec![];
         let selector = Selector::parse("head script").unwrap();
-        let script = self.html.select(&selector).nth(3).unwrap().inner_html();
+        let script = self
+            .html
+            .select(&selector)
+            .nth(3)
+            .context(parse_error::BiliPlayInfoNotFound)?
+            .inner_html();
         let info = script.split_at(20).1;
         let info_json: serde_json::Value = serde_json::from_str(info).unwrap();
 
         // This closure helps extracting video and audio from info_json
-        let get_urls = |ty: &str| -> ParseResult<Vec<&serde_json::Value>> {
+        let get_urls = |ty: &str| -> ParseResult<Vec<String>> {
             Ok(info_json
                 .pointer(&format!("/data/dash/{ty}"))
                 .context(parse_error::JsonParseError)?
                 .as_array()
                 .context(parse_error::JsonParseError)?
                 .iter()
-                .filter_map(|v| v.pointer("/base_url"))
+                .filter_map(|v| Some(v.pointer("/base_url")?.to_string()))
                 .collect())
         };
 
@@ -38,7 +43,7 @@ impl Parser {
         tracing::debug!("{:#?}", v_urls);
         tracing::debug!("{:#?}", a_urls);
 
-        if ret.len() == 0 {
+        if ret.is_empty() {
             parse_error::NoTargetFound.fail()?;
         }
         Ok(ret)
@@ -53,9 +58,7 @@ mod tests {
     #[tokio::test]
     async fn parse_bili_test() {
         crate::config::config_init();
-        let task =
-            Task::new("https://www.bilibili.com/video/BV1NN411F7HE/?spm_id_from=333.999.0.0")
-                .unwrap();
+        let task = Task::new("https://www.bilibili.com/video/BV1NN411F7HE").unwrap();
         let ret = task.go().await;
     }
 }

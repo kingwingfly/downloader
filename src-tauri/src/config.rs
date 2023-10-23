@@ -1,20 +1,28 @@
+use config::ConfigError;
 use config::{Config, Map, Source, Value, ValueKind};
 use std::{collections::HashSet, sync::OnceLock};
 
-pub(crate) static APP_CONFIG: OnceLock<Config> = OnceLock::new();
-pub(crate) const USER_AGENT: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.1 Safari/605.1.15";
+static APP_CONFIG: OnceLock<Result<Config, ConfigError>> = OnceLock::new();
+const USER_AGENT: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.1 Safari/605.1.15";
 
-pub fn config_init() {
+pub fn config_init() -> Result<(), ConfigError> {
     APP_CONFIG.get_or_init(|| {
         Config::builder()
-            .set_default("user-agent", USER_AGENT)
-            .unwrap()
-            .set_default("cookie", "")
-            .unwrap()
+            .set_default("user-agent", USER_AGENT)?
+            .set_default("cookie", "")?
             .add_source(KeySource)
             .build()
-            .unwrap()
     });
+    Ok(())
+}
+
+pub fn get_config<S: AsRef<str>>(key: S) -> Option<String> {
+    APP_CONFIG
+        .get()?
+        .as_ref()
+        .ok()?
+        .get_string(key.as_ref())
+        .ok()
 }
 
 #[derive(Debug, Clone)]
@@ -61,11 +69,8 @@ mod test {
 
     #[tokio::test]
     async fn init_config_test() {
-        config_init();
-        assert_eq!(
-            APP_CONFIG.get().unwrap().get_string("user-agent").unwrap(),
-            USER_AGENT
-        );
-        assert_eq!(APP_CONFIG.get().unwrap().get_string("cookie").unwrap(), "")
+        assert!(config_init().is_ok());
+        assert_eq!(get_config("user-agent").unwrap(), USER_AGENT);
+        assert_ne!(get_config("cookie").unwrap(), "")
     }
 }
