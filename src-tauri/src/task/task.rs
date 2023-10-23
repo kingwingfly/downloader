@@ -1,10 +1,10 @@
-use snafu::ResultExt;
-use url::Url;
-
-use super::error::{task_error, TaskError, TaskResult};
-use crate::config::APP_CONFIG;
+use super::error::{parse_error, task_error, TaskResult};
+use crate::{config::APP_CONFIG, task::parser::Parser};
+use async_recursion::async_recursion;
 use scraper::Html;
+use snafu::ResultExt;
 use tracing::{debug, info, instrument, Level};
+use url::Url;
 use uuid::Uuid;
 
 #[derive(Debug)]
@@ -16,25 +16,17 @@ pub enum TaskType {
 
 // Task
 pub trait TaskExe {
-    fn new<S: AsRef<str>>(url: S) -> TaskResult<Task>;
-    fn go(&self) -> TaskResult<()>;
+    #[async_recursion]
+    async fn go(&self) -> TaskResult<()> {
+        Ok(())
+    }
     async fn get_html(&self) -> TaskResult<Html>;
-    fn get_task_type(&self) -> TaskType;
+    async fn save(&self) -> TaskResult<()>;
     fn cancel(&self) -> TaskResult<()>;
     fn pause(&self) -> TaskResult<()>;
     fn continue_(&self) -> TaskResult<()>;
     fn revive(&self) -> TaskResult<()>;
     fn restart(&self) -> TaskResult<()>;
-    async fn get_target(&self) -> TaskResult<Vec<Task>> {
-        match self.get_task_type() {
-            TaskType::BiliBili => {
-                let html = self.get_html().await?;
-                // let target = parser.html(html).bilibili()?;
-                todo!()
-            }
-            TaskType::Unknown => Err(TaskError::UnknownTaskType),
-        }
-    }
 }
 
 #[cfg_attr(test, derive(Debug))]
@@ -43,8 +35,8 @@ pub struct Task {
     url: Url,
 }
 
-impl TaskExe for Task {
-    fn new<S>(url: S) -> TaskResult<Self>
+impl Task {
+    pub fn new<S>(url: S) -> TaskResult<Self>
     where
         S: AsRef<str>,
     {
@@ -56,11 +48,49 @@ impl TaskExe for Task {
             })?,
         })
     }
-    fn go(&self) -> TaskResult<()> {
-        todo!()
+
+    #[instrument(level=Level::DEBUG, skip(self), fields(url=self.url.as_str()), ret)]
+    fn get_task_type(&self) -> TaskType {
+        match self.url.host_str() {
+            Some("bilibili.com") | Some("www.bilibili.com") => TaskType::BiliBili,
+            Some(_) | None => TaskType::Unknown,
+        }
     }
 
-    #[cfg_attr(test, instrument(level=Level::DEBUG, skip(self), fields(uuid=format!("<{:.5}...>", self.id.to_string())), err))]
+    async fn get_child_tasks(&self) -> TaskResult<Vec<Task>> {
+        match self.get_task_type() {
+            TaskType::BiliBili => {
+                let html = self.get_html().await?;
+                let child_tasks = Parser::html(html).bilibili()?;
+                debug_assert!(child_tasks.len() > 0);
+                Ok(child_tasks)
+            }
+            TaskType::Unknown => task_error::UnknownTaskType.fail()?,
+        }
+    }
+}
+
+impl TaskExe for Task {
+    #[async_recursion]
+    async fn go(&self) -> TaskResult<()> {
+        match self.get_child_tasks().await {
+            Ok(tasks) => {
+                for t in tasks {
+                    t.go().await?;
+                }
+            }
+            Err(super::TaskError::ParseHtmlError {
+                // Only when dive into the task leaf
+                source: super::error::ParseError::NoTargetFound,
+            }) => {
+                self.save().await?;
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
+    #[cfg_attr(test, instrument(level=Level::DEBUG, skip(self), fields(uuid=format!("<{:.5}...>", self.id.to_string()), rs), err))]
     async fn get_html(&self) -> TaskResult<Html> {
         // region get_resp
         let user_agent = APP_CONFIG.get().unwrap().get_string("user-agent").unwrap();
@@ -75,19 +105,18 @@ impl TaskExe for Task {
             .send()
             .await?;
         // endregion get_resp
-        info!("Response status: {}", resp.status());
-        match resp.status().as_u16() {
+        let status = resp.status().as_u16();
+        #[cfg(test)]
+        tracing::Span::current().record("rs", &status);
+        match status {
             200 => Ok(Html::parse_document(&resp.text().await?)),
-            _ => Err(TaskError::StatusError),
+            _ => task_error::StatusError.fail()?,
         }
     }
 
-    #[instrument(level=Level::DEBUG, skip(self))]
-    fn get_task_type(&self) -> TaskType {
-        match self.url.host_str() {
-            Some("bilibili.com") | Some("www.bilibili.com") => TaskType::BiliBili,
-            Some(_) | None => TaskType::Unknown,
-        }
+    #[cfg_attr(test, instrument(level=Level::DEBUG, skip(self), fields(uuid=format!("<{:.5}...>", self.id.to_string())), err))]
+    async fn save(&self) -> TaskResult<()> {
+        Ok(())
     }
 
     #[cfg_attr(test, instrument(level=Level::DEBUG, skip(self), fields(uuid=format!("<{:.5}...>", self.id.to_string())), err))]
@@ -150,5 +179,13 @@ mod tests {
         assert_eq!(task.get_task_type(), TaskType::BiliBili);
         let task = Task::new("https://www.bilibili.com/video/BV1a84y127b4/?spm_id_from=333.1007.top_right_bar_window_history.content.click&vd_source=9ea481f2d8d2d522899fe515c8f472c8").unwrap();
         assert_eq!(task.get_task_type(), TaskType::BiliBili);
+    }
+
+    #[tracing_test::traced_test]
+    #[tokio::test]
+    async fn task_go_test() {
+        crate::config::config_init();
+        let task = Task::new("https://bilibili.com").unwrap();
+        assert!(task.go().await.is_ok());
     }
 }

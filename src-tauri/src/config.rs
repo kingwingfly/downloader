@@ -25,7 +25,16 @@ impl Source for KeySource {
         Box::new(self.to_owned())
     }
     fn collect(&self) -> Result<config::Map<String, config::Value>, config::ConfigError> {
-        Ok(MapWrapper::from(HashSet::from([("cookie", "")])).0)
+        if cfg!(test) {
+            dotenv::dotenv().ok();
+            Ok(MapWrapper::from(HashSet::from([(
+                "cookie",
+                std::env::var("COOKIE").unwrap(),
+            )]))
+            .0)
+        } else {
+            Ok(MapWrapper::from(HashSet::from([("cookie", "")])).0)
+        }
     }
 }
 

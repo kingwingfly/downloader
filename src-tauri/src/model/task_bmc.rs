@@ -1,11 +1,10 @@
-use uuid::Uuid;
-
-use super::Model;
-
 use super::error::{bmc_error, BmcResult};
+use super::Model;
 use crate::task::{Task, TaskExe};
+use actix::prelude::*;
 use snafu::OptionExt;
 use std::rc::Rc;
+use uuid::Uuid;
 
 #[cfg(test)]
 use tracing::debug;
@@ -50,10 +49,20 @@ impl TaskBmc {
         Ok(uuid)
     }
 
+    pub fn remove(&mut self, id: Uuid) -> BmcResult<()> {
+        let i = self
+            .model
+            .tasks
+            .iter()
+            .position(|t| t.id == id)
+            .context(bmc_error::TaskNotFoundError { id })?;
+        self.model.tasks[i].cancel()?;
+        self.model.tasks.swap_remove(i);
+        Ok(())
+    }
+
     bmc_func![cancel, pause, continue_, revive, restart];
 }
-
-use actix::prelude::*;
 
 impl Actor for TaskBmc {
     type Context = Context<Self>;
@@ -109,7 +118,7 @@ macro_rules! handler_gen {
     }
 }
 
-handler_gen![Cancel, Pause, Continue_, Revive, Restart];
+handler_gen![Cancel, Pause, Continue_, Revive, Restart, Remove];
 
 // endregion handler
 
@@ -171,6 +180,7 @@ mod tests {
             assert!(addr.send(Pause(id)).await.is_ok());
             assert!(addr.send(Continue_(id)).await.is_ok());
             assert!(addr.send(Restart(id)).await.is_ok());
+            assert!(addr.send(Remove(id)).await.is_ok());
         };
         Arbiter::current().spawn(exe);
         System::current().stop();
