@@ -25,8 +25,8 @@ uuid = "1.4.1"
 tracing-test = "0.2.4"
 actix = "0.13.1"
 casey = "0.4.0"
-async-recursion = "1.0.5"
 dotenv = "0.15.0"
+actix-rt = "2.9.0"
 
 [dev-dependencies]
 

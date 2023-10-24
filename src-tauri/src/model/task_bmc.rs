@@ -127,7 +127,7 @@ mod tests {
     use super::*;
     use tracing_test::traced_test;
 
-    #[tokio::test]
+    #[actix_rt::test]
     async fn create_test() {
         let mut task_bmc = TaskBmc::new();
         assert!(task_bmc.create("http://bilibili.com").is_ok());
@@ -137,8 +137,8 @@ mod tests {
     }
 
     #[traced_test]
-    #[test]
-    fn handle_test() {
+    #[actix_rt::test]
+    async fn handle_test() {
         let mut task_bmc = TaskBmc::new();
         let id1 = task_bmc.create("http://bilibili.com").unwrap();
         assert!(task_bmc.cancel(id1).is_ok());
@@ -150,40 +150,28 @@ mod tests {
     }
 
     #[traced_test]
-    #[test]
-    fn actix_test() {
-        let system = System::new();
-        let exe = async {
-            let task_bmc = TaskBmc::new();
-            let addr = task_bmc.start();
-            let ping = Ping;
-            assert!(addr.send(ping).await.is_ok());
-        };
-        Arbiter::current().spawn(exe);
-        System::current().stop();
-        system.run().unwrap();
+    #[actix_rt::test]
+    async fn actix_test() {
+        let task_bmc = TaskBmc::new();
+        let addr = task_bmc.start();
+        let ping = Ping;
+        assert!(addr.send(ping).await.is_ok());
     }
 
     #[traced_test]
-    #[test]
-    fn actix_handler_test() {
-        let system = System::new();
-        let exe = async {
-            let task_bmc = TaskBmc::new();
-            let addr = task_bmc.start();
-            assert!(addr.send(Ping).await.unwrap().is_ok());
-            let ret = addr.send(Create("http://bilibili.com")).await.unwrap();
-            assert!(ret.is_ok());
-            let id = ret.unwrap();
-            assert!(addr.send(Cancel(id)).await.is_ok());
-            assert!(addr.send(Revive(id)).await.is_ok());
-            assert!(addr.send(Pause(id)).await.is_ok());
-            assert!(addr.send(Continue_(id)).await.is_ok());
-            assert!(addr.send(Restart(id)).await.is_ok());
-            assert!(addr.send(Remove(id)).await.is_ok());
-        };
-        Arbiter::current().spawn(exe);
-        System::current().stop();
-        system.run().unwrap();
+    #[actix_rt::test]
+    async fn actix_handler_test() {
+        let task_bmc = TaskBmc::new();
+        let addr = task_bmc.start();
+        assert!(addr.send(Ping).await.unwrap().is_ok());
+        let ret = addr.send(Create("http://bilibili.com")).await.unwrap();
+        assert!(ret.is_ok());
+        let id = ret.unwrap();
+        assert!(addr.send(Cancel(id)).await.is_ok());
+        assert!(addr.send(Revive(id)).await.is_ok());
+        assert!(addr.send(Pause(id)).await.is_ok());
+        assert!(addr.send(Continue_(id)).await.is_ok());
+        assert!(addr.send(Restart(id)).await.is_ok());
+        assert!(addr.send(Remove(id)).await.is_ok());
     }
 }

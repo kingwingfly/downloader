@@ -19,6 +19,10 @@ pub enum TaskError {
     UnknownTaskType,
     #[snafu(context(suffix(false)))]
     ConfigNotFound,
+    #[snafu(context(false))]
+    SaveError { source: ActorError },
+    #[snafu(context(false))]
+    ActixError { source: actix::MailboxError },
 }
 
 pub type TaskResult<T> = Result<T, TaskError>;
@@ -35,3 +39,12 @@ pub enum ParseError {
 }
 
 pub type ParseResult<T> = Result<T, ParseError>;
+
+#[derive(Debug, Snafu)]
+#[snafu(module, visibility(pub(crate)), context(suffix(Error)))]
+pub enum ActorError {
+    #[snafu(context(suffix(false)))]
+    BiliSaveError,
+}
+
+pub type ActorResult<T> = Result<T, ActorError>;

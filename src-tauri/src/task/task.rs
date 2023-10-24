@@ -1,12 +1,15 @@
-use super::error::{parse_error, task_error, TaskResult};
+use super::error::{task_error, TaskResult};
+use super::task_actor::{RunTask, TaskActor};
 use crate::config::get_config;
 use crate::task::parser::Parser;
-use async_recursion::async_recursion;
+use actix::{Actor, Addr};
 use scraper::Html;
 use snafu::{OptionExt, ResultExt};
-use tracing::{debug, info, instrument, Level};
 use url::Url;
 use uuid::Uuid;
+
+#[cfg(test)]
+use tracing::{instrument, Level};
 
 #[derive(Debug)]
 #[cfg_attr(test, derive(PartialEq))]
@@ -15,12 +18,9 @@ pub enum TaskType {
     Unknown,
 }
 
-// Task
+// region Task
 pub trait TaskExe {
-    #[async_recursion]
-    async fn go(&self) -> TaskResult<()> {
-        Ok(())
-    }
+    async fn go(&self) -> TaskResult<()>;
     async fn get_html(&self) -> TaskResult<Html>;
     async fn save(&self) -> TaskResult<()>;
     fn cancel(&self) -> TaskResult<()>;
@@ -34,6 +34,7 @@ pub trait TaskExe {
 pub struct Task {
     pub id: Uuid,
     url: Url,
+    addr: Addr<TaskActor>,
 }
 
 impl Task {
@@ -42,15 +43,17 @@ impl Task {
         S: AsRef<str>,
     {
         // Todo maybe use channel to push task in another thread???
+        let addr = TaskActor::new().start();
         Ok(Self {
             id: Uuid::new_v4(),
             url: Url::parse(url.as_ref()).context(task_error::ParseUrlError {
                 url: url.as_ref().to_string(),
             })?,
+            addr,
         })
     }
 
-    #[instrument(level=Level::DEBUG, skip(self), fields(url=self.url.as_str()), ret)]
+    #[cfg_attr(test, instrument(level=Level::DEBUG, skip(self), fields(url=self.url.as_str()), ret))]
     fn get_task_type(&self) -> TaskType {
         match self.url.host_str() {
             Some("bilibili.com") | Some("www.bilibili.com") => TaskType::BiliBili,
@@ -58,6 +61,7 @@ impl Task {
         }
     }
 
+    #[cfg_attr(test, instrument(level=Level::DEBUG, skip(self), fields(uuid=format!("<{:.5}...>", self.id.to_string())), err))]
     async fn get_child_tasks(&self) -> TaskResult<Vec<Task>> {
         match self.get_task_type() {
             TaskType::BiliBili => {
@@ -72,21 +76,9 @@ impl Task {
 }
 
 impl TaskExe for Task {
-    #[async_recursion]
     async fn go(&self) -> TaskResult<()> {
-        match self.get_child_tasks().await {
-            Ok(tasks) => {
-                for t in tasks {
-                    t.go().await?;
-                }
-            }
-            Err(super::TaskError::ParseHtmlError {
-                // Only when dive into the task leaf
-                source: super::error::ParseError::NoTargetFound,
-            }) => {
-                self.save().await?;
-            }
-            _ => {}
+        for t in self.get_child_tasks().await? {
+            t.save().await?;
         }
         Ok(())
     }
@@ -117,6 +109,10 @@ impl TaskExe for Task {
 
     #[cfg_attr(test, instrument(level=Level::DEBUG, skip(self), fields(uuid=format!("<{:.5}...>", self.id.to_string())), err))]
     async fn save(&self) -> TaskResult<()> {
+        let child_task = RunTask {
+            url: self.url.clone(),
+        };
+        self.addr.send(child_task).await??;
         Ok(())
     }
 
@@ -146,13 +142,14 @@ impl TaskExe for Task {
     }
 }
 
-// Task
+// endregion Task
 
 #[cfg(test)]
 mod tests {
+
     use super::*;
 
-    #[tokio::test]
+    #[actix_rt::test]
     async fn new_task_test() {
         // region url parse test
         assert!(Task::new("http://localhost:3000").is_ok());
@@ -166,15 +163,15 @@ mod tests {
         // endregion url parse test
     }
 
-    #[tokio::test]
+    #[actix_rt::test]
     async fn get_test() {
         assert!(crate::config::config_init().is_ok());
         let task = Task::new("https://bilibili.com").unwrap();
         assert!(task.get_html().await.is_ok());
     }
 
-    #[test]
-    fn get_task_type_test() {
+    #[actix_rt::test]
+    async fn get_task_type_test() {
         assert!(crate::config::config_init().is_ok());
         let task = Task::new("https://bilibili.com").unwrap();
         assert_eq!(task.get_task_type(), TaskType::BiliBili);
@@ -183,7 +180,7 @@ mod tests {
     }
 
     #[tracing_test::traced_test]
-    #[tokio::test]
+    #[actix_rt::test]
     async fn task_go_test() {
         assert!(crate::config::config_init().is_ok());
         let task = Task::new("https://www.bilibili.com/video/BV1NN411F7HE").unwrap();

@@ -3,7 +3,7 @@ use scraper::{Html, Selector};
 use snafu::{OptionExt, ResultExt};
 use url::Url;
 
-use super::{Task, TaskExe};
+use super::Task;
 
 pub struct Parser {
     html: Html,
@@ -32,9 +32,9 @@ impl Parser {
             .nth(3)
             .context(parse_error::BiliPlayInfoNotFound)?
             .inner_html();
-        let info = script.split_at(20).1;
+        let json = script.split_at(20).1;
         let info_json: serde_json::Value =
-            serde_json::from_str(info).context(parse_error::JsonParseError)?;
+            serde_json::from_str(json).context(parse_error::JsonParseError)?;
 
         let parse = |ty: &str| -> ParseResult<Vec<Info>> {
             Ok(info_json
@@ -50,11 +50,14 @@ impl Parser {
         let videos = parse("video")?;
         let audios = parse("audio")?;
 
-        #[cfg(test)]
-        {
-            tracing::debug!("{:#?}", videos);
-            tracing::debug!("{:#?}", audios);
-        }
+        // #[cfg(test)]
+        // {
+        //     tracing::debug!("{:#?}", videos);
+        //     tracing::debug!("{:#?}", audios);
+        // }
+
+        ret.push(Task::new(&videos[0].url).unwrap());
+        ret.push(Task::new(&audios[0].url).unwrap());
 
         if ret.is_empty() {
             parse_error::NoTargetFound.fail()?;
@@ -68,10 +71,9 @@ mod tests {
     use super::*;
 
     #[tracing_test::traced_test]
-    #[tokio::test]
+    #[actix_rt::test]
     async fn parse_bili_test() {
-        crate::config::config_init();
+        crate::config::config_init().unwrap();
         let task = Task::new("https://www.bilibili.com/video/BV1NN411F7HE").unwrap();
-        let ret = task.go().await;
     }
 }
