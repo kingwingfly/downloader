@@ -1,11 +1,21 @@
 use super::error::{parse_error, ParseResult};
 use scraper::{Html, Selector};
-use snafu::OptionExt;
+use snafu::{OptionExt, ResultExt};
+use url::Url;
 
 use super::{Task, TaskExe};
 
 pub struct Parser {
     html: Html,
+}
+
+#[cfg_attr(test, derive(Debug))]
+#[derive(serde::Deserialize)]
+struct Info {
+    #[serde(rename(deserialize = "base_url"))]
+    url: Url,
+    width: usize,
+    height: usize,
 }
 
 impl Parser {
@@ -23,25 +33,28 @@ impl Parser {
             .context(parse_error::BiliPlayInfoNotFound)?
             .inner_html();
         let info = script.split_at(20).1;
-        let info_json: serde_json::Value = serde_json::from_str(info).unwrap();
+        let info_json: serde_json::Value =
+            serde_json::from_str(info).context(parse_error::JsonParseError)?;
 
-        // This closure helps extracting video and audio from info_json
-        let get_urls = |ty: &str| -> ParseResult<Vec<String>> {
+        let parse = |ty: &str| -> ParseResult<Vec<Info>> {
             Ok(info_json
                 .pointer(&format!("/data/dash/{ty}"))
-                .context(parse_error::JsonParseError)?
+                .context(parse_error::BiliPlayInfoNotFound)?
                 .as_array()
-                .context(parse_error::JsonParseError)?
+                .context(parse_error::BiliPlayInfoNotFound)?
                 .iter()
-                .filter_map(|v| Some(v.pointer("/base_url")?.to_string()))
+                .filter_map(|v| serde_json::from_value(v.clone()).ok())
                 .collect())
         };
 
-        let v_urls = get_urls("video")?;
-        let a_urls = get_urls("audio")?;
+        let videos = parse("video")?;
+        let audios = parse("audio")?;
 
-        tracing::debug!("{:#?}", v_urls);
-        tracing::debug!("{:#?}", a_urls);
+        #[cfg(test)]
+        {
+            tracing::debug!("{:#?}", videos);
+            tracing::debug!("{:#?}", audios);
+        }
 
         if ret.is_empty() {
             parse_error::NoTargetFound.fail()?;

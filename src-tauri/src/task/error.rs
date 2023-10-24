@@ -29,7 +29,7 @@ pub enum ParseError {
     #[snafu(context(suffix(false)))]
     NoTargetFound,
     #[snafu()]
-    JsonParseError,
+    JsonParseError { source: serde_json::error::Error },
     #[snafu(context(suffix(false)))]
     BiliPlayInfoNotFound,
 }
