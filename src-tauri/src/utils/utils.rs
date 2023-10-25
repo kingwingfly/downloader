@@ -15,6 +15,13 @@ pub struct TempDirHandler {
     temp_dir: TempDir,
 }
 
+#[cfg(test)]
+impl Drop for TempDirHandler {
+    fn drop(&mut self) {
+        debug!("temp dir dropped");
+    }
+}
+
 impl TempDirHandler {
     pub fn new() -> TempDirResult<Self> {
         Ok(Self {
@@ -31,6 +38,8 @@ impl TempDirHandler {
             .open(file_path)?;
         f.write_all(buf)?;
         f.sync_all()?;
+        #[cfg(test)]
+        debug!("{} bytes writed to {:?}", buf.len(), self.temp_dir.path());
         Ok(())
     }
 

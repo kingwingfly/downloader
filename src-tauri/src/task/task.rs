@@ -33,7 +33,7 @@ pub trait TaskExe {
 #[cfg_attr(test, derive(Debug))]
 pub struct Task {
     pub id: Uuid,
-    url: Url,
+    pub(super) url: Url,
     addr: Addr<TaskActor>,
 }
 
@@ -61,7 +61,7 @@ impl Task {
         }
     }
 
-    #[cfg_attr(test, instrument(level=Level::DEBUG, skip(self), fields(uuid=format!("<{:.5}...>", self.id.to_string())), err))]
+    // #[cfg_attr(test, instrument(level=Level::DEBUG, skip(self), fields(uuid=format!("<{:.5}...>", self.id.to_string())), err))]
     async fn get_child_tasks(&self) -> TaskResult<Vec<Task>> {
         match self.get_task_type() {
             TaskType::BiliBili => {
@@ -109,9 +109,7 @@ impl TaskExe for Task {
 
     #[cfg_attr(test, instrument(level=Level::DEBUG, skip(self), fields(uuid=format!("<{:.5}...>", self.id.to_string())), err))]
     async fn save(&self) -> TaskResult<()> {
-        let child_task = RunTask {
-            url: self.url.clone(),
-        };
+        let child_task = RunTask::new(self.url.clone());
         self.addr.send(child_task).await??;
         Ok(())
     }
@@ -185,5 +183,6 @@ mod tests {
         assert!(crate::config::config_init().is_ok());
         let task = Task::new("https://www.bilibili.com/video/BV1NN411F7HE").unwrap();
         assert!(task.go().await.is_ok());
+        tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
     }
 }

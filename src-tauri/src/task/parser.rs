@@ -31,10 +31,11 @@ impl Parser {
             .select(&selector)
             .nth(3)
             .context(parse_error::BiliPlayInfoNotFound)?
-            .inner_html();
+            .inner_html()
+            .replace("&amp;", "&");
         let json = script.split_at(20).1;
         let info_json: serde_json::Value =
-            serde_json::from_str(json).context(parse_error::JsonParseError)?;
+            serde_json::from_str(&json).context(parse_error::JsonParseError)?;
 
         let parse = |ty: &str| -> ParseResult<Vec<Info>> {
             Ok(info_json
@@ -50,12 +51,6 @@ impl Parser {
         let videos = parse("video")?;
         let audios = parse("audio")?;
 
-        // #[cfg(test)]
-        // {
-        //     tracing::debug!("{:#?}", videos);
-        //     tracing::debug!("{:#?}", audios);
-        // }
-
         ret.push(Task::new(&videos[0].url).unwrap());
         ret.push(Task::new(&audios[0].url).unwrap());
 
@@ -69,11 +64,18 @@ impl Parser {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::task::TaskExe;
 
     #[tracing_test::traced_test]
     #[actix_rt::test]
     async fn parse_bili_test() {
         crate::config::config_init().unwrap();
         let task = Task::new("https://www.bilibili.com/video/BV1NN411F7HE").unwrap();
+        let html = task.get_html().await.unwrap();
+        let ret = Parser::html(html).bilibili().unwrap();
+        for t in ret {
+            tracing::debug!("{}", t.url.to_string());
+            assert!(!t.url.to_string().contains("&amp"));
+        }
     }
 }
