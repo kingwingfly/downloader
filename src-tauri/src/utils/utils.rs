@@ -74,12 +74,12 @@ where
         let file_path = self.temp_dir.path().join(format!(
             "{}.{}",
             self.filename.as_ref(),
-            suffix.as_ref().replace(".", "")
+            suffix.as_ref().replace('.', "")
         ));
         let mut f = std::fs::OpenOptions::new()
             .create(true)
             .append(true)
-            .open(&file_path)?;
+            .open(file_path)?;
         f.write_all(buf)?;
         f.sync_all()?;
         // #[cfg(test)]
@@ -94,9 +94,7 @@ where
     {
         let to = to.as_ref().join(&filename);
         let from = self.temp_dir.path().join(filename);
-        std::fs::rename(&from, &to)?;
-        #[cfg(test)]
-        debug!("move from {:?} to {:?}", from, to);
+        std::fs::rename(from, to)?;
         Ok(())
     }
 

@@ -1,6 +1,6 @@
 use actix::prelude::*;
 use reqwest::Client;
-use std::{path::Path, sync::Arc};
+use std::sync::Arc;
 use tracing::debug;
 use url::Url;
 
@@ -38,7 +38,7 @@ async fn get_total(client: Arc<Client>, url: Url) -> Option<usize> {
     client
         .get(url)
         .header("Referer", "https://www.bilibili.com/")
-        .header("Range", format!("bytes=0-0",))
+        .header("Range", "bytes=0-0".to_string())
         .send()
         .await
         .unwrap()
@@ -148,7 +148,7 @@ pub struct Pause;
 impl Handler<Pause> for TaskActor {
     type Result = ActorResult<()>;
 
-    fn handle(&mut self, msg: Pause, ctx: &mut Self::Context) -> Self::Result {
+    fn handle(&mut self, _msg: Pause, _ctx: &mut Self::Context) -> Self::Result {
         if !self.paused {
             debug!("pause");
             self.paused = true;
@@ -168,7 +168,7 @@ pub struct Continue_;
 impl Handler<Continue_> for TaskActor {
     type Result = ActorResult<()>;
 
-    fn handle(&mut self, _msg: Continue_, ctx: &mut Self::Context) -> Self::Result {
+    fn handle(&mut self, _msg: Continue_, _ctx: &mut Self::Context) -> Self::Result {
         if self.paused {
             debug!("continue");
             self.paused = false;
@@ -188,7 +188,7 @@ struct Cancel;
 impl Handler<Cancel> for TaskActor {
     type Result = ActorResult<()>;
 
-    fn handle(&mut self, msg: Cancel, ctx: &mut Self::Context) -> Self::Result {
+    fn handle(&mut self, _msg: Cancel, ctx: &mut Self::Context) -> Self::Result {
         ctx.stop();
         Ok(())
     }

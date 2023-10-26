@@ -35,7 +35,7 @@ impl Parser {
             .replace("&amp;", "&");
         let json = json.split_at(20).1;
         let info_json: serde_json::Value =
-            serde_json::from_str(&json).context(parse_error::JsonParseError)?;
+            serde_json::from_str(json).context(parse_error::JsonParseError)?;
 
         let selector = Selector::parse("h1.video-title").unwrap();
         let filename = self

@@ -6,8 +6,7 @@ use snafu::OptionExt;
 use std::rc::Rc;
 use uuid::Uuid;
 
-#[cfg(test)]
-use tracing::debug;
+
 
 pub struct TaskBmc {
     model: Model,

@@ -1,4 +1,3 @@
-use std::path::Path;
 use std::sync::Arc;
 
 use super::error::{task_error, TaskResult};
@@ -113,7 +112,7 @@ impl TaskExe for Task {
         // endregion get_resp
         let status = resp.status().as_u16();
         #[cfg(test)]
-        tracing::Span::current().record("rs", &status);
+        tracing::Span::current().record("rs", status);
         match status {
             200 => Ok(Html::parse_document(&resp.text().await?)),
             _ => task_error::StatusError.fail()?,
