@@ -1,7 +1,12 @@
+use std::path::Path;
+use std::sync::Arc;
+
 use super::error::{task_error, TaskResult};
-use super::task_actor::{RunTask, TaskActor};
+use super::parser::Info;
+use super::task_actor::{Continue_, Pause, RunTask, TaskActor};
 use crate::config::get_config;
 use crate::task::parser::Parser;
+use crate::utils::TempDirHandler;
 use actix::{Actor, Addr};
 use scraper::Html;
 use snafu::{OptionExt, ResultExt};
@@ -22,7 +27,11 @@ pub enum TaskType {
 pub trait TaskExe {
     async fn go(&self) -> TaskResult<()>;
     async fn get_html(&self) -> TaskResult<Html>;
-    async fn save(&self) -> TaskResult<()>;
+    async fn save<S: 'static + AsRef<str> + Send + Sync>(
+        &self,
+        filename: S,
+        infos: Vec<Url>,
+    ) -> TaskResult<()>;
     fn cancel(&self) -> TaskResult<()>;
     fn pause(&self) -> TaskResult<()>;
     fn continue_(&self) -> TaskResult<()>;
@@ -62,7 +71,7 @@ impl Task {
     }
 
     // #[cfg_attr(test, instrument(level=Level::DEBUG, skip(self), fields(uuid=format!("<{:.5}...>", self.id.to_string())), err))]
-    async fn get_child_tasks(&self) -> TaskResult<Vec<Task>> {
+    async fn get_child_tasks(&self) -> TaskResult<Vec<Info>> {
         match self.get_task_type() {
             TaskType::BiliBili => {
                 let html = self.get_html().await?;
@@ -77,14 +86,18 @@ impl Task {
 
 impl TaskExe for Task {
     async fn go(&self) -> TaskResult<()> {
-        for t in self.get_child_tasks().await? {
-            t.save().await?;
-        }
+        let infos = self.get_child_tasks().await?;
+        self.save(
+            infos[0].filename.clone(),
+            infos.into_iter().map(|i| i.url).collect(),
+        )
+        .await?;
         Ok(())
     }
 
     #[cfg_attr(test, instrument(level=Level::DEBUG, skip(self), fields(uuid=format!("<{:.5}...>", self.id.to_string()), rs), err))]
     async fn get_html(&self) -> TaskResult<Html> {
+        crate::config::config_init().unwrap();
         // region get_resp
         let user_agent = get_config("user-agent").context(task_error::ConfigNotFound)?;
         let cookie = get_config("cookie").context(task_error::ConfigNotFound)?;
@@ -107,9 +120,16 @@ impl TaskExe for Task {
         }
     }
 
-    #[cfg_attr(test, instrument(level=Level::DEBUG, skip(self), fields(uuid=format!("<{:.5}...>", self.id.to_string())), err))]
-    async fn save(&self) -> TaskResult<()> {
-        let child_task = RunTask::new(self.url.clone());
+    // #[cfg_attr(test, instrument(level=Level::DEBUG, skip(self), fields(uuid=format!("<{:.5}...>", self.id.to_string())), err))]
+    async fn save<S: 'static + AsRef<str> + Send + Sync>(
+        &self,
+        filename: S,
+        mut urls: Vec<Url>,
+    ) -> TaskResult<()> {
+        let temp_dir = Arc::new(TempDirHandler::new(filename).unwrap());
+        let child_task = RunTask::new("aac", urls.pop().unwrap(), temp_dir.clone());
+        self.addr.send(child_task).await??;
+        let child_task = RunTask::new("mp4", urls.pop().unwrap(), temp_dir.clone());
         self.addr.send(child_task).await??;
         Ok(())
     }
@@ -121,11 +141,13 @@ impl TaskExe for Task {
 
     #[cfg_attr(test, instrument(level=Level::DEBUG, skip(self), fields(uuid=format!("<{:.5}...>", self.id.to_string())), err))]
     fn pause(&self) -> TaskResult<()> {
+        self.addr.do_send(Pause);
         Ok(())
     }
 
     #[cfg_attr(test, instrument(level=Level::DEBUG, skip(self), fields(uuid=format!("<{:.5}...>", self.id.to_string())), err))]
     fn continue_(&self) -> TaskResult<()> {
+        self.addr.do_send(Continue_);
         Ok(())
     }
 
@@ -183,6 +205,10 @@ mod tests {
         assert!(crate::config::config_init().is_ok());
         let task = Task::new("https://www.bilibili.com/video/BV1NN411F7HE").unwrap();
         assert!(task.go().await.is_ok());
+        tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+        assert!(task.pause().is_ok());
         tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
+        assert!(task.continue_().is_ok());
+        tokio::time::sleep(tokio::time::Duration::from_secs(10)).await;
     }
 }

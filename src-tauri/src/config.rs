@@ -35,10 +35,10 @@ impl Source for KeySource {
     fn collect(&self) -> Result<config::Map<String, config::Value>, config::ConfigError> {
         if cfg!(test) {
             dotenv::dotenv().ok();
-            Ok(MapWrapper::from(HashSet::from([(
-                "cookie",
-                std::env::var("COOKIE").unwrap(),
-            )]))
+            Ok(MapWrapper::from(HashSet::from([
+                ("cookie", std::env::var("COOKIE").unwrap_or("".to_string())),
+                ("save_dir", std::env::var("SAVE_DIR").unwrap()),
+            ]))
             .0)
         } else {
             Ok(MapWrapper::from(HashSet::from([("cookie", "")])).0)
