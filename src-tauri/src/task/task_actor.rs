@@ -60,24 +60,22 @@ async fn get_total(client: Arc<Client>, url: Url) -> Option<usize> {
 
 #[derive(Message)]
 #[rtype(result = "ActorResult<()>")]
-pub struct RunTask<S1, S2>
+pub struct RunTask<S1>
 where
     S1: 'static + AsRef<str> + Send + Sync,
-    S2: 'static + AsRef<str> + Send + Sync,
 {
     suffix: S1,
     url: Url,
-    temp_dir: Arc<TempDirHandler<S2>>,
+    temp_dir: Arc<TempDirHandler>,
     finished: usize,
     total: usize,
 }
 
-impl<S1, S2> RunTask<S1, S2>
+impl<S1> RunTask<S1>
 where
     S1: 'static + AsRef<str> + Send + Sync,
-    S2: 'static + AsRef<str> + Send + Sync,
 {
-    pub fn new(suffix: S1, url: Url, temp_dir: Arc<TempDirHandler<S2>>) -> Self {
+    pub fn new(suffix: S1, url: Url, temp_dir: Arc<TempDirHandler>) -> Self {
         Self {
             suffix,
             url,
@@ -88,14 +86,13 @@ where
     }
 }
 
-impl<S1, S2> Handler<RunTask<S1, S2>> for TaskActor
+impl<S1> Handler<RunTask<S1>> for TaskActor
 where
     S1: 'static + AsRef<str> + Send + Sync,
-    S2: 'static + AsRef<str> + Send + Sync,
 {
     type Result = ActorResult<()>;
 
-    fn handle(&mut self, mut msg: RunTask<S1, S2>, ctx: &mut Self::Context) -> Self::Result {
+    fn handle(&mut self, mut msg: RunTask<S1>, ctx: &mut Self::Context) -> Self::Result {
         match self.paused {
             true => {
                 ctx.notify_later(msg, tokio::time::Duration::from_secs(2));
