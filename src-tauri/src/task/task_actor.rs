@@ -1,11 +1,13 @@
+use super::error::ActorResult;
+use crate::utils::TempDirHandler;
 use actix::prelude::*;
+
 use reqwest::Client;
 use std::sync::Arc;
 use tracing::debug;
 use url::Url;
 
-use super::error::ActorResult;
-use crate::utils::TempDirHandler;
+use tracing::{instrument, Level};
 
 // region TaskActor
 #[derive(Debug)]
@@ -41,15 +43,13 @@ async fn get_total(client: Arc<Client>, url: Url) -> Option<usize> {
         .header("Range", "bytes=0-0".to_string())
         .send()
         .await
-        .unwrap()
+        .ok()?
         .headers()
-        .get(reqwest::header::CONTENT_RANGE)
-        .unwrap()
+        .get(reqwest::header::CONTENT_RANGE)?
         .to_str()
-        .unwrap()
+        .ok()?
         .split('/')
-        .last()
-        .unwrap()
+        .last()?
         .parse::<usize>()
         .ok()
 }
@@ -60,51 +60,59 @@ async fn get_total(client: Arc<Client>, url: Url) -> Option<usize> {
 
 #[derive(Message)]
 #[rtype(result = "ActorResult<()>")]
-pub struct RunTask<S1>
-where
-    S1: 'static + AsRef<str> + Send + Sync,
-{
-    suffix: S1,
+#[cfg_attr(test, derive(Debug))]
+pub struct RunTask {
+    suffix: String,
     url: Url,
     temp_dir: Arc<TempDirHandler>,
     finished: usize,
     total: usize,
+    tx: tokio::sync::oneshot::Sender<ActorResult<()>>,
 }
 
-impl<S1> RunTask<S1>
-where
-    S1: 'static + AsRef<str> + Send + Sync,
-{
-    pub fn new(suffix: S1, url: Url, temp_dir: Arc<TempDirHandler>) -> Self {
+impl RunTask {
+    pub fn new<S>(
+        suffix: S,
+        url: Url,
+        temp_dir: Arc<TempDirHandler>,
+        tx: tokio::sync::oneshot::Sender<ActorResult<()>>,
+    ) -> Self
+    where
+        S: AsRef<str>,
+    {
         Self {
-            suffix,
+            suffix: suffix.as_ref().to_string(),
             url,
             temp_dir,
             finished: 0,
             total: 0,
+            tx,
         }
     }
 }
 
-impl<S1> Handler<RunTask<S1>> for TaskActor
-where
-    S1: 'static + AsRef<str> + Send + Sync,
-{
+impl Handler<RunTask> for TaskActor {
     type Result = ActorResult<()>;
 
-    fn handle(&mut self, mut msg: RunTask<S1>, ctx: &mut Self::Context) -> Self::Result {
+    #[instrument(level=Level::DEBUG, skip(self, msg, ctx), fields(url=msg.url.as_str(), format=msg.suffix), err)]
+    fn handle(&mut self, mut msg: RunTask, ctx: &mut Self::Context) -> Self::Result {
         match self.paused {
             true => {
-                ctx.notify_later(msg, tokio::time::Duration::from_secs(2));
+                if !ctx.state().stopping() {
+                    ctx.notify_later(msg, tokio::time::Duration::from_secs(2));
+                }
             }
             false => {
                 let client = self.client.clone();
                 let addr = ctx.address();
                 ctx.spawn(actix::fut::wrap_future(async move {
                     if msg.total == 0 {
-                        msg.total = get_total(client.clone(), msg.url.clone()).await.unwrap();
+                        msg.total = match get_total(client.clone(), msg.url.clone()).await {
+                            Some(total) => total,
+                            None => return,
+                        }
                     }
-                    let mut resp = client
+                    let mut resp = match client
                         .get(msg.url.clone())
                         .header("Referer", "https://www.bilibili.com/")
                         .header(
@@ -117,16 +125,26 @@ where
                         )
                         .send()
                         .await
-                        .unwrap();
-                    while let Some(c) = resp.chunk().await.unwrap() {
-                        msg.temp_dir.write(msg.suffix.as_ref(), &c).unwrap();
+                    {
+                        Ok(resp) => resp,
+                        Err(_) => return,
+                    };
+                    loop {
+                        match resp.chunk().await {
+                            Ok(Some(c)) => {
+                                msg.temp_dir.write(&msg.suffix, &c).unwrap();
+                            }
+                            Ok(None) => break,
+                            Err(_) => return,
+                        }
                     }
                     msg.finished += 5 * (1 << 20) + 1;
                     #[cfg(test)]
                     debug!("{}", resp.status());
                     match msg.finished >= msg.total {
-                        false => addr.do_send(msg),
-                        true => {}
+                        false => addr.do_send(msg), // move msg to next epoch
+                        true => msg.tx.send(Ok(())).unwrap(), // drop msg -> drop Arc<TempDirHandler> -> if strong count is 0,
+                                                              // then merge will invoke when drop TempDirHandler
                     }
                 }));
             }
@@ -180,7 +198,7 @@ impl Handler<Continue_> for TaskActor {
 
 #[derive(Message)]
 #[rtype(result = "ActorResult<()>")]
-struct Cancel;
+pub struct Cancel;
 
 impl Handler<Cancel> for TaskActor {
     type Result = ActorResult<()>;
@@ -244,12 +262,23 @@ mod tests {
     #[actix_rt::test]
     async fn run_task_test() {
         let addr = TaskActor::new().start();
+        let temp_dir = Arc::new(TempDirHandler::new("file").unwrap());
+        let (tx, rx) = tokio::sync::oneshot::channel();
         let run_task = RunTask::new(
             "mp4",
-            Url::parse("https://upos-sz-mirror08c.bilivideo.com/upgcxcode/66/77/1049107766/1049107766-1-30112.m4s?e=ig8euxZM2rNcNbdlhoNvNC8BqJIzNbfqXBvEqxTEto8BTrNvN0GvT90W5JZMkX_YN0MvXg8gNEV4NC8xNEV4N03eN0B5tZlqNxTEto8BTrNvNeZVuJ10Kj_g2UB02J0mN0B5tZlqNCNEto8BTrNvNC7MTX502C8f2jmMQJ6mqF2fka1mqx6gqj0eN0B599M=&uipk=5&nbs=1&deadline=1698368309&gen=playurlv2&os=08cbv&oi=3736210139&trid=68afaf6910be4b16995abe08b084f17cu&mid=32280488&platform=pc&upsig=88155da79fcb638939bc1af98aabd9c9&uparams=e,uipk,nbs,deadline,gen,os,oi,trid,mid,platform&bvc=vod&nettype=0&orderid=0,3&buvid=&build=0&f=u_0_0&agrr=1&bw=669180&logo=80000000").unwrap(),
-            Arc::new(TempDirHandler::new("file").unwrap()),
+            Url::parse("https://upos-sz-mirror08c.bilivideo.com/upgcxcode/66/77/1049107766/1049107766-1-30112.m4s?e=ig8euxZM2rNcNbdlhoNvNC8BqJIzNbfqXBvEqxTEto8BTrNvN0GvT90W5JZMkX_YN0MvXg8gNEV4NC8xNEV4N03eN0B5tZlqNxTEto8BTrNvNeZVuJ10Kj_g2UB02J0mN0B5tZlqNCNEto8BTrNvNC7MTX502C8f2jmMQJ6mqF2fka1mqx6gqj0eN0B599M=&uipk=5&nbs=1&deadline=1698616254&gen=playurlv2&os=08cbv&oi=3736210139&trid=db65754bb9494698aa13ec17f376d111u&mid=32280488&platform=pc&upsig=a8b17c487797cac95a5fc6e967f81eaf&uparams=e,uipk,nbs,deadline,gen,os,oi,trid,mid,platform&bvc=vod&nettype=0&orderid=0,3&buvid=&build=0&f=u_0_0&agrr=1&bw=669180&logo=80000000").unwrap(),
+            temp_dir.clone(),tx
         );
         assert!(addr.send(run_task).await.is_ok());
+        assert!(rx.await.is_ok());
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        let run_task = RunTask::new(
+            "aac",
+            Url::parse("https://upos-sz-mirrorali.bilivideo.com/upgcxcode/66/77/1049107766/1049107766-1-30280.m4s?e=ig8euxZM2rNcNbdlhoNvNC8BqJIzNbfqXBvEqxTEto8BTrNvN0GvT90W5JZMkX_YN0MvXg8gNEV4NC8xNEV4N03eN0B5tZlqNxTEto8BTrNvNeZVuJ10Kj_g2UB02J0mN0B5tZlqNCNEto8BTrNvNC7MTX502C8f2jmMQJ6mqF2fka1mqx6gqj0eN0B599M=&uipk=5&nbs=1&deadline=1698616254&gen=playurlv2&os=alibv&oi=3736210139&trid=db65754bb9494698aa13ec17f376d111u&mid=32280488&platform=pc&upsig=7a99aaee8fa3f4466c1fe804770f3264&uparams=e,uipk,nbs,deadline,gen,os,oi,trid,mid,platform&bvc=vod&nettype=0&orderid=0,3&buvid=&build=0&f=u_0_0&agrr=1&bw=30625&logo=80000000").unwrap(),
+            temp_dir.clone(),tx
+        );
+        assert!(addr.send(run_task).await.is_ok());
+        assert!(rx.await.is_ok());
         tokio::time::sleep(tokio::time::Duration::from_secs(15)).await;
     }
 }

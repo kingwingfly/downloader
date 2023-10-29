@@ -41,7 +41,11 @@ impl Source for KeySource {
             ]))
             .0)
         } else {
-            Ok(MapWrapper::from(HashSet::from([("cookie", "")])).0)
+            Ok(MapWrapper::from(HashSet::from([
+                ("cookie", ""),
+                ("save_dir", "/Users/louis"),
+            ]))
+            .0)
         }
     }
 }

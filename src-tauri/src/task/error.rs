@@ -9,7 +9,7 @@ pub enum TaskError {
         source: url::ParseError,
         url: String,
     },
-    #[snafu(context(false))]
+    #[snafu(display("Maybe network disconnected"), context(false))]
     GetError { source: ReqwestError },
     #[snafu(context(false))]
     ParseHtmlError { source: ParseError },
@@ -43,8 +43,12 @@ pub type ParseResult<T> = Result<T, ParseError>;
 #[derive(Debug, Snafu)]
 #[snafu(module, visibility(pub(crate)), context(suffix(Error)))]
 pub enum ActorError {
-    #[snafu(context(suffix(false)))]
+    #[snafu()]
     BiliSaveError,
+    #[snafu(context(suffix(false)))]
+    ContentLengthUnknown,
+    #[snafu()]
+    NetWorkError { source: reqwest::Error },
 }
 
 pub type ActorResult<T> = Result<T, ActorError>;

@@ -79,7 +79,7 @@ mod tests {
     #[tracing_test::traced_test]
     #[actix_rt::test]
     async fn parse_bili_test() {
-        crate::config::config_init().unwrap();
+        assert!(crate::config::config_init().is_ok(), "config init failed");
         let task = Task::new("https://www.bilibili.com/video/BV1NN411F7HE").unwrap();
         let html = task.get_html().await.unwrap();
         let ret = Parser::html(html).bilibili().unwrap();

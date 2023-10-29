@@ -9,7 +9,7 @@ export default function NewTaskBar() {
         e.preventDefault()
         let form = new FormData(e.currentTarget)
         let url = form.get('url')?.toString()
-        let ret = window.__TAURI__ ? await invoke("echo", { s: url }) : echo(url)
+        let ret = window.__TAURI__ ? await invoke("create", { url }) : echo(url)
         console.log(ret)
     }
     return (
