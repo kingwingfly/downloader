@@ -4,11 +4,8 @@ use snafu::prelude::*;
 #[derive(Debug, Snafu)]
 #[snafu(module, visibility(pub(crate)), context(suffix(Error)))]
 pub enum TaskError {
-    #[snafu(display("Could not parse url: {url}"))]
-    ParseUrl {
-        source: url::ParseError,
-        url: String,
-    },
+    #[snafu(display("Could not parse url"), context(false))]
+    ParseUrl { source: url::ParseError },
     #[snafu(display("Maybe network disconnected"), context(false))]
     GetError { source: ReqwestError },
     #[snafu(context(false))]

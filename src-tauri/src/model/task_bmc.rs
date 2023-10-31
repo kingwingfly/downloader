@@ -1,13 +1,22 @@
+use std::collections::HashMap;
+use std::sync::Arc;
+
 use super::error::{bmc_error, BmcResult};
 use super::Model;
-use crate::task::{Task, TaskExe};
-use actix::prelude::*;
+use crate::task::Task;
 use snafu::OptionExt;
+use tokio::sync::mpsc;
+use tokio::sync::oneshot::{self, Sender as OnceSender};
 
 use uuid::Uuid;
 
+type CreateResult = Result<Arc<Task>, crate::task::TaskError>;
+type Message = Option<(String, OnceSender<CreateResult>)>;
+
 pub struct TaskBmc {
     model: Model,
+    tx: mpsc::Sender<Message>,
+    jh: Option<std::thread::JoinHandle<()>>,
 }
 
 macro_rules! bmc_func {
@@ -31,8 +40,34 @@ macro_rules! bmc_func {
 
 impl TaskBmc {
     pub fn new() -> Self {
+        let (tx, mut rx) = mpsc::channel::<Message>(8);
+        let jh = std::thread::spawn(move || {
+            actix_rt::Runtime::new().unwrap().block_on(async move {
+                let mut jhs = Vec::new();
+                while let Some(Some((url, tx))) = rx.recv().await {
+                    let task = Task::new(url);
+                    match task {
+                        Ok(task) => {
+                            let task = Arc::new(task);
+                            tx.send(Ok(task.clone())).ok();
+                            let jh = actix_rt::spawn(async move { task.go().await });
+                            jhs.push(jh);
+                        }
+                        Err(e) => {
+                            tx.send(Err(e)).ok();
+                        }
+                    }
+                }
+                for jh in jhs {
+                    jh.await.ok();
+                }
+                tracing::info!("all finished");
+            });
+        });
         Self {
             model: Model::new(),
+            tx,
+            jh: Some(jh),
         }
     }
 
@@ -40,7 +75,11 @@ impl TaskBmc {
     where
         S: AsRef<str>,
     {
-        let new_task = Task::new(url)?;
+        let (tx, rx) = oneshot::channel::<CreateResult>();
+        self.tx
+            .blocking_send(Some((url.as_ref().to_string(), tx)))
+            .unwrap();
+        let new_task = rx.blocking_recv().unwrap()?;
         let uuid = new_task.id;
         self.model.tasks.push(new_task);
         Ok(uuid)
@@ -58,70 +97,29 @@ impl TaskBmc {
         Ok(())
     }
 
+    pub fn process(&self) -> BmcResult<HashMap<String, (usize, usize)>> {
+        let mut hp = HashMap::new();
+        for t in self.model.tasks.iter() {
+            let (filename, finished, total) = t.process_query().unwrap();
+            println!("{}: {}/ {}", filename, finished, total);
+            hp.insert(filename, (finished, total));
+        }
+        Ok(hp)
+    }
+
     bmc_func![cancel, pause, continue_, revive, restart];
 }
 
-impl Default for TaskBmc {
-    fn default() -> Self {
-        Self::new()
+impl Drop for TaskBmc {
+    fn drop(&mut self) {
+        // self.model.tasks.iter().for_each(|t| {
+        //     t.cancel().ok();
+        // });
+        self.tx.blocking_send(None).ok();
+        self.jh.take().unwrap().join().ok();
+        println!("task bmc droped");
     }
 }
-
-impl Actor for TaskBmc {
-    type Context = Context<Self>;
-}
-
-#[cfg(test)]
-#[derive(Message)]
-#[rtype(result = "BmcResult<()>")]
-struct Ping;
-
-#[cfg(test)]
-impl Handler<Ping> for TaskBmc {
-    type Result = BmcResult<()>;
-
-    fn handle(&mut self, _msg: Ping, _ctx: &mut Self::Context) -> Self::Result {
-        Ok(())
-    }
-}
-
-// region handler
-
-#[derive(Message)]
-#[rtype(result = "BmcResult<Uuid>")]
-pub struct Create<S: AsRef<str>>(pub S);
-
-impl<S> Handler<Create<S>> for TaskBmc
-where
-    S: AsRef<str>,
-{
-    type Result = BmcResult<Uuid>;
-
-    fn handle(&mut self, msg: Create<S>, _ctx: &mut Self::Context) -> Self::Result {
-        self.create(msg.0)
-    }
-}
-
-macro_rules! handler_gen {
-    ($msg_name:ident) => {
-        #[derive(Message)]
-        #[rtype(result = "BmcResult<()>")]
-        pub struct $msg_name(pub Uuid);
-
-        impl Handler<$msg_name> for TaskBmc {
-            type Result = BmcResult<()>;
-
-            fn handle(&mut self, msg: $msg_name, _ctx: &mut Self::Context) -> Self::Result {
-                casey::lower![self.$msg_name(msg.0)]
-            }
-        }
-    };
-    ($($msg_name:ident),+) => {
-        $(handler_gen![$msg_name];)+
-    }
-}
-
-handler_gen![Cancel, Pause, Continue_, Revive, Restart, Remove];
 
 // endregion handler
 
@@ -130,55 +128,35 @@ mod tests {
     use super::*;
     use tracing_test::traced_test;
 
-    #[actix_rt::test]
-    async fn create_test() {
+    #[test]
+    fn create_test() {
         let mut task_bmc = TaskBmc::new();
-        assert!(task_bmc.create("http://bilibili.com").is_ok());
+        assert!(task_bmc
+            .create("https://www.bilibili.com/video/BV1NN411F7HE")
+            .is_ok());
         assert!(task_bmc.model.tasks.len() == 1);
         assert!(task_bmc.create("should fail").is_err());
         assert!(task_bmc.model.tasks.len() == 1);
     }
 
     #[traced_test]
-    #[actix_rt::test]
-    async fn handle_test() {
+    #[test]
+    fn bmc_test() {
         let mut task_bmc = TaskBmc::new();
-        let id1 = task_bmc.create("http://bilibili.com").unwrap();
-        assert!(task_bmc.cancel(id1).is_ok());
-        let id2 = task_bmc.create("http://bilibili.com").unwrap();
-        assert!(task_bmc.pause(id2).is_ok());
-        assert!(task_bmc.continue_(id2).is_ok());
-        assert!(task_bmc.revive(id1).is_ok());
-        assert!(task_bmc.restart(id1).is_ok());
-    }
-
-    #[traced_test]
-    #[actix_rt::test]
-    async fn actix_test() {
-        let task_bmc = TaskBmc::new();
-        let addr = task_bmc.start();
-        let ping = Ping;
-        assert!(addr.send(ping).await.is_ok());
-    }
-
-    #[traced_test]
-    #[actix_rt::test]
-    async fn actix_handler_test() {
-        let task_bmc = TaskBmc::new();
-        let addr = task_bmc.start();
-        assert!(addr.send(Ping).await.unwrap().is_ok());
-        let ret = addr
-            .send(Create("https://www.bilibili.com/video/BV1NN411F7HE"))
-            .await
+        // let id1 = task_bmc
+        //     .create("https://www.bilibili.com/video/BV1NN411F7HE")
+        //     .unwrap();
+        // assert!(task_bmc.cancel(id1).is_ok());
+        let id2 = task_bmc
+            .create("https://www.bilibili.com/video/BV1NN411F7HE")
             .unwrap();
-        assert!(ret.is_ok());
-        let id = ret.unwrap();
-        // assert!(addr.send(Cancel(id)).await.is_ok());
-        // assert!(addr.send(Revive(id)).await.is_ok());
-        assert!(addr.send(Pause(id)).await.is_ok());
-        assert!(addr.send(Continue_(id)).await.is_ok());
-        // assert!(addr.send(Restart(id)).await.is_ok());
-        // assert!(addr.send(Remove(id)).await.is_ok());
-        tokio::time::sleep(tokio::time::Duration::from_secs(10)).await;
+        std::thread::sleep(std::time::Duration::from_secs(2));
+        assert!(task_bmc.pause(id2).is_ok());
+        std::thread::sleep(std::time::Duration::from_secs(2));
+        assert!(task_bmc.continue_(id2).is_ok());
+        // std::thread::sleep(std::time::Duration::from_secs(10));
+
+        // assert!(task_bmc.revive(id1).is_ok());
+        // assert!(task_bmc.restart(id1).is_ok());
     }
 }

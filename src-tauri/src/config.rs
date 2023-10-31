@@ -9,7 +9,7 @@ pub fn config_init() -> Result<(), ConfigError> {
     APP_CONFIG.get_or_init(|| {
         Config::builder()
             .set_default("user-agent", USER_AGENT)?
-            .set_default("cookie", "")?
+            .set_default("bili_cookie", "")?
             .add_source(KeySource)
             .build()
     });
@@ -36,13 +36,16 @@ impl Source for KeySource {
         if cfg!(test) {
             dotenv::dotenv().ok();
             Ok(MapWrapper::from(HashSet::from([
-                ("cookie", std::env::var("COOKIE").unwrap_or("".to_string())),
+                (
+                    "bili_cookie",
+                    std::env::var("BILI_COOKIE").unwrap_or("".to_string()),
+                ),
                 ("save_dir", std::env::var("SAVE_DIR").unwrap()),
             ]))
             .0)
         } else {
             Ok(MapWrapper::from(HashSet::from([
-                ("cookie", ""),
+                ("bili_cookie", ""),
                 ("save_dir", "/Users/louis"),
             ]))
             .0)

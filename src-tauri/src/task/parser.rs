@@ -12,8 +12,6 @@ pub struct Parser {
 pub struct Info {
     #[serde(rename(deserialize = "base_url"))]
     pub url: Url,
-    #[serde(default)]
-    pub filename: String,
     width: usize,
     height: usize,
 }
@@ -23,7 +21,7 @@ impl Parser {
         Self { html }
     }
 
-    pub fn bilibili(&self) -> ParseResult<Vec<Info>> {
+    pub fn bilibili(&self) -> ParseResult<(String, Vec<Info>)> {
         let mut ret = vec![];
         let selector = Selector::parse("head script").unwrap();
         let json = self
@@ -66,15 +64,14 @@ impl Parser {
         if ret.is_empty() {
             parse_error::NoTargetFound.fail()?;
         }
-        ret[0].filename = filename;
-        Ok(ret)
+        Ok((filename, ret))
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::task::{Task, TaskExe};
+    use crate::task::Task;
 
     #[tracing_test::traced_test]
     #[actix_rt::test]
@@ -83,10 +80,9 @@ mod tests {
         let task = Task::new("https://www.bilibili.com/video/BV1NN411F7HE").unwrap();
         let html = task.get_html().await.unwrap();
         let ret = Parser::html(html).bilibili().unwrap();
-        for t in ret {
-            tracing::debug!("{}", t.url.to_string());
-            tracing::debug!("{}", t.filename.to_string());
-            assert!(!t.url.to_string().contains("&amp"));
+        for info in ret.1 {
+            tracing::debug!("{}", info.url.to_string());
+            assert!(!info.url.to_string().contains("&amp"));
         }
     }
 }

@@ -20,39 +20,20 @@ use error::TempDirResult;
 #[cfg_attr(test, derive(Debug))]
 pub struct TempDirHandler {
     temp_dir: TempDir,
-    v_p: PathBuf,
-    a_p: PathBuf,
+    filename: String,
     o_p: PathBuf,
 }
 
+#[cfg(test)]
 impl Drop for TempDirHandler {
     fn drop(&mut self) {
-        #[cfg(test)]
-        debug!("merging");
-        let _statu = std::process::Command::new("/usr/local/bin/ffmpeg")
-            .args([
-                "-y",
-                "-i",
-                self.v_p.to_string_lossy().as_ref(),
-                "-i",
-                self.a_p.to_string_lossy().as_ref(),
-                "-c:v",
-                "copy",
-                "-c:a",
-                "copy",
-                self.o_p.to_string_lossy().as_ref(),
-            ])
-            .status();
-        #[cfg(test)]
-        debug!("temp dir dropped");
+        debug!("TempDirHandler dropping");
     }
 }
 
 impl TempDirHandler {
     pub fn new<S: AsRef<str>>(filename: S) -> TempDirResult<Self> {
         let temp_dir = TempDir::new("downloader")?;
-        let v_p = temp_dir.path().join(format!("{}.mp4", filename.as_ref()));
-        let a_p = temp_dir.path().join(format!("{}.aac", filename.as_ref()));
         let o_p = if cfg!(test) {
             temp_dir.path().join("merge_test.mp4")
         } else {
@@ -61,42 +42,61 @@ impl TempDirHandler {
         // TODO illegal filename filter
         Ok(Self {
             temp_dir,
-            v_p,
-            a_p,
+            filename: filename.as_ref().to_string(),
             o_p,
         })
     }
 
     pub fn write<Su: AsRef<str>>(&self, suffix: Su, buf: &[u8]) -> TempDirResult<()> {
-        match suffix.as_ref() {
-            ".mp4" | "mp4" => {
-                let mut f = std::fs::OpenOptions::new()
-                    .create(true)
-                    .append(true)
-                    .open(&self.v_p)?;
-                f.write_all(buf)?;
-                f.sync_all()?;
-            }
-            ".aac" | "aac" => {
-                let mut f = std::fs::OpenOptions::new()
-                    .create(true)
-                    .append(true)
-                    .open(&self.a_p)?;
-                f.write_all(buf)?;
-                f.sync_all()?;
-            }
-            _ => {}
-        }
+        let path = self
+            .temp_dir
+            .path()
+            .join(format!("{}.{}", self.filename, suffix.as_ref()));
+        let mut f = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&path)?;
+        f.write_all(buf)?;
+        f.sync_all()?;
         Ok(())
     }
 
-    pub fn move_<P1, P2>(&self, filename: P1, to: P2) -> std::io::Result<()>
+    pub fn save(&self) {
+        #[cfg(test)]
+        debug!("saving");
+        let mut cmd = std::process::Command::new("/usr/local/bin/ffmpeg");
+        for path in std::fs::read_dir(self.temp_dir.path()).unwrap() {
+            let path = path.unwrap();
+            match new_mime_guess::from_path(path.path()).first() {
+                Some(mime) => match mime.type_() {
+                    mime::VIDEO | mime::AUDIO => {
+                        cmd.args(["-i", path.path().to_string_lossy().as_ref()]);
+                    }
+                    _ => {
+                        self.move_(path.file_name()).ok();
+                    }
+                },
+                None => {}
+            }
+        }
+        cmd.args([
+            "-y",
+            "-c:v",
+            "copy",
+            "-c:a",
+            "copy",
+            self.o_p.to_string_lossy().as_ref(),
+        ]);
+        let _statu = cmd.status();
+    }
+
+    pub fn move_<P1>(&self, filename: P1) -> std::io::Result<()>
     where
         P1: AsRef<Path>,
-        P2: AsRef<Path>,
     {
-        let to = to.as_ref().join(&filename);
-        let from = self.temp_dir.path().join(filename);
+        let from = self.temp_dir.path().join(filename.as_ref());
+        let to = self.o_p.join(filename.as_ref());
+        tracing::debug!("move from {:?} to {:?}", from, to);
         std::fs::rename(from, to)?;
         Ok(())
     }
@@ -135,7 +135,7 @@ mod test {
     fn move_test() {
         let temp_file_handler = TempDirHandler::new("test").unwrap();
         assert!(temp_file_handler.write(".txt", b"Hello, world").is_ok());
-        assert!(temp_file_handler.move_(".txt", "/Users/louis").is_ok());
+        assert!(temp_file_handler.move_(".txt").is_ok());
         assert!(std::fs::remove_file("/Users/louis/test.txt").is_ok());
     }
 }

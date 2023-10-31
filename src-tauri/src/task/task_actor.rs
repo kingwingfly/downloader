@@ -1,19 +1,21 @@
 use super::error::ActorResult;
 use crate::utils::TempDirHandler;
 use actix::prelude::*;
-
 use reqwest::Client;
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::Arc;
+use tokio::sync::oneshot;
 use tracing::debug;
-use url::Url;
-
 use tracing::{instrument, Level};
+use url::Url;
 
 // region TaskActor
 #[derive(Debug)]
 pub struct TaskActor {
-    paused: bool,
-    client: Arc<Client>,
+    paused: Arc<AtomicBool>,
+    total: Arc<AtomicUsize>,
+    finished: Arc<AtomicUsize>,
+    filename: Option<String>,
 }
 
 impl TaskActor {
@@ -21,37 +23,16 @@ impl TaskActor {
         #[cfg(test)]
         crate::config::config_init().unwrap();
         Self {
-            paused: false,
-            client: Arc::new(
-                reqwest::Client::builder()
-                    .user_agent(crate::config::get_config("user-agent").unwrap())
-                    .build()
-                    .unwrap(),
-            ),
+            paused: Arc::new(AtomicBool::new(false)),
+            total: Arc::new(AtomicUsize::new(0)),
+            finished: Arc::new(AtomicUsize::new(0)),
+            filename: None,
         }
     }
 }
 
 impl Actor for TaskActor {
     type Context = Context<Self>;
-}
-
-async fn get_total(client: Arc<Client>, url: Url) -> Option<usize> {
-    client
-        .get(url)
-        .header("Referer", "https://www.bilibili.com/")
-        .header("Range", "bytes=0-0".to_string())
-        .send()
-        .await
-        .ok()?
-        .headers()
-        .get(reqwest::header::CONTENT_RANGE)?
-        .to_str()
-        .ok()?
-        .split('/')
-        .last()?
-        .parse::<usize>()
-        .ok()
 }
 
 // endregion TaskActor
@@ -65,9 +46,7 @@ pub struct RunTask {
     suffix: String,
     url: Url,
     temp_dir: Arc<TempDirHandler>,
-    finished: usize,
-    total: usize,
-    tx: tokio::sync::oneshot::Sender<ActorResult<()>>,
+    tx: oneshot::Sender<ActorResult<()>>,
 }
 
 impl RunTask {
@@ -75,7 +54,7 @@ impl RunTask {
         suffix: S,
         url: Url,
         temp_dir: Arc<TempDirHandler>,
-        tx: tokio::sync::oneshot::Sender<ActorResult<()>>,
+        tx: oneshot::Sender<ActorResult<()>>,
     ) -> Self
     where
         S: AsRef<str>,
@@ -84,8 +63,6 @@ impl RunTask {
             suffix: suffix.as_ref().to_string(),
             url,
             temp_dir,
-            finished: 0,
-            total: 0,
             tx,
         }
     }
@@ -95,64 +72,53 @@ impl Handler<RunTask> for TaskActor {
     type Result = ActorResult<()>;
 
     #[instrument(level=Level::DEBUG, skip(self, msg, ctx), fields(url=msg.url.as_str(), format=msg.suffix), err)]
-    fn handle(&mut self, mut msg: RunTask, ctx: &mut Self::Context) -> Self::Result {
-        match self.paused {
-            true => {
-                if !ctx.state().stopping() {
-                    ctx.notify_later(msg, tokio::time::Duration::from_secs(2));
-                }
-            }
-            false => {
-                let client = self.client.clone();
-                let addr = ctx.address();
-                ctx.spawn(actix::fut::wrap_future(async move {
-                    if msg.total == 0 {
-                        msg.total = match get_total(client.clone(), msg.url.clone()).await {
-                            Some(total) => total,
-                            None => return,
-                        }
-                    }
-                    let mut resp = match client
+    fn handle(&mut self, msg: RunTask, ctx: &mut Self::Context) -> Self::Result {
+        let actor_total = self.total.clone();
+        let actor_finished = self.finished.clone();
+        let pause = self.paused.clone();
+        let addr = ctx.address();
+        actix_rt::spawn(async move {
+            let client = Arc::new(
+                reqwest::Client::builder()
+                    .user_agent(crate::config::get_config("user-agent").unwrap())
+                    .build()
+                    .unwrap(),
+            );
+            let total = get_total(client.clone(), msg.url.clone())
+                .await
+                .unwrap_or(0);
+            actor_total.fetch_add(total, Ordering::Relaxed);
+            let mut finished = 0;
+            while finished < total {
+                if !pause.load(Ordering::Relaxed) {
+                    let mut resp = client
                         .get(msg.url.clone())
                         .header("Referer", "https://www.bilibili.com/")
                         .header(
                             "Range",
                             format!(
                                 "bytes={}-{}",
-                                msg.finished,
-                                (msg.total - 1).min(msg.finished + 5 * (1 << 20))
+                                finished,
+                                (total - 1).min(finished + (1 << 23))
                             ),
                         )
                         .send()
                         .await
-                    {
-                        Ok(resp) => resp,
-                        Err(_) => return,
-                    };
-                    loop {
-                        match resp.chunk().await {
-                            Ok(Some(c)) => {
-                                msg.temp_dir.write(&msg.suffix, &c).unwrap();
-                            }
-                            Ok(None) => break,
-                            Err(_) => return,
-                        }
+                        .unwrap();
+                    while let Some(c) = resp.chunk().await.unwrap() {
+                        msg.temp_dir.write(&msg.suffix, &c).unwrap();
+                        actor_finished.fetch_add(c.len(), Ordering::Relaxed);
                     }
-                    msg.finished += 5 * (1 << 20) + 1;
-                    #[cfg(test)]
-                    debug!("{}", resp.status());
-                    match msg.finished >= msg.total {
-                        false => addr.do_send(msg), // move msg to next epoch
-                        true => msg.tx.send(Ok(())).unwrap(), // drop msg -> drop Arc<TempDirHandler> -> if strong count is 0,
-                                                              // then merge will invoke when drop TempDirHandler
-                    }
-                }));
+                    finished += (1 << 23) + 1;
+                } else {
+                    tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+                }
             }
-        }
+            msg.tx.send(Ok(())).unwrap();
+        });
         Ok(())
     }
 }
-
 //endregion RunTask Message
 
 // region Pause Message
@@ -164,10 +130,8 @@ impl Handler<Pause> for TaskActor {
     type Result = ActorResult<()>;
 
     fn handle(&mut self, _msg: Pause, _ctx: &mut Self::Context) -> Self::Result {
-        if !self.paused {
-            debug!("pause");
-            self.paused = true;
-        }
+        debug!("pause");
+        self.paused.store(true, Ordering::Relaxed);
         Ok(())
     }
 }
@@ -184,10 +148,8 @@ impl Handler<Continue_> for TaskActor {
     type Result = ActorResult<()>;
 
     fn handle(&mut self, _msg: Continue_, _ctx: &mut Self::Context) -> Self::Result {
-        if self.paused {
-            debug!("continue");
-            self.paused = false;
-        }
+        debug!("continue");
+        self.paused.store(false, Ordering::Relaxed);
         Ok(())
     }
 }
@@ -209,54 +171,77 @@ impl Handler<Cancel> for TaskActor {
     }
 }
 
-#[cfg(test)]
-#[derive(Message, Default)]
-#[rtype(result = "()")]
-pub struct HeartBeat {
-    count: usize,
+// endregion Cancel Message
+
+// region ProcessQuery Message
+
+#[derive(Message)]
+#[rtype(result = "ActorResult<()>")]
+pub struct ProcessQuery {
+    tx: oneshot::Sender<ActorResult<(String, usize, usize)>>,
 }
 
-#[cfg(test)]
-impl Drop for HeartBeat {
-    fn drop(&mut self) {
-        debug!("heat beat {}", self.count);
+impl ProcessQuery {
+    pub fn new(tx: oneshot::Sender<ActorResult<(String, usize, usize)>>) -> Self {
+        Self { tx }
     }
 }
 
-#[cfg(test)]
-impl Handler<HeartBeat> for TaskActor {
-    type Result = ();
+impl Handler<ProcessQuery> for TaskActor {
+    type Result = ActorResult<()>;
 
-    fn handle(&mut self, msg: HeartBeat, ctx: &mut Self::Context) -> Self::Result {
-        if self.paused {
-            ctx.notify_later(msg, tokio::time::Duration::from_secs(2));
-            return;
-        }
-        let addr = ctx.address();
-        ctx.spawn(actix::fut::wrap_future(async move {
-            tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
-            addr.do_send(HeartBeat {
-                count: msg.count + 1,
-            });
-        }));
+    fn handle(&mut self, msg: ProcessQuery, _ctx: &mut Self::Context) -> Self::Result {
+        msg.tx
+            .send(Ok((
+                self.filename.as_deref().unwrap().to_owned(),
+                self.finished.load(Ordering::Relaxed),
+                self.total.load(Ordering::Relaxed),
+            )))
+            .unwrap();
+        Ok(())
     }
+}
+
+// endregion ProcessQuery Message
+
+// region SetFilename Message
+
+#[derive(Message)]
+#[rtype(result = "ActorResult<()>")]
+pub struct SetFilename(pub String);
+
+impl Handler<SetFilename> for TaskActor {
+    type Result = ActorResult<()>;
+
+    fn handle(&mut self, msg: SetFilename, _ctx: &mut Self::Context) -> Self::Result {
+        self.filename = Some(msg.0);
+        Ok(())
+    }
+}
+
+// endregion SetFilename Message
+
+async fn get_total(client: Arc<Client>, url: Url) -> Option<usize> {
+    client
+        .get(url)
+        .header("Referer", "https://www.bilibili.com/")
+        .header("Range", "bytes=0-0".to_string())
+        .send()
+        .await
+        .ok()?
+        .headers()
+        .get(reqwest::header::CONTENT_RANGE)?
+        .to_str()
+        .ok()?
+        .split('/')
+        .last()?
+        .parse::<usize>()
+        .ok()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[tracing_test::traced_test]
-    #[actix_rt::test]
-    async fn heat_beat_test() {
-        let addr = TaskActor::new().start();
-        addr.do_send(HeartBeat::default());
-        tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
-        addr.do_send(Pause);
-        tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
-        addr.do_send(Continue_);
-        tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
-    }
 
     #[tracing_test::traced_test]
     #[actix_rt::test]
