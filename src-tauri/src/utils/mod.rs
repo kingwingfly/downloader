@@ -33,16 +33,16 @@ impl Drop for TempDirHandler {
 
 impl TempDirHandler {
     pub fn new<S: AsRef<str>>(filename: S) -> TempDirResult<Self> {
+        let filename = sanitize_filename::sanitize(filename);
         let temp_dir = TempDir::new("downloader")?;
         let o_p = if cfg!(test) {
             temp_dir.path().join("merge_test.mp4")
         } else {
-            Path::new(&get_config("save_dir").unwrap()).join(format!("{}.mp4", filename.as_ref()))
+            Path::new(&get_config("save_dir").unwrap()).join(format!("{}.mp4", filename))
         };
-        // TODO illegal filename filter
         Ok(Self {
             temp_dir,
-            filename: filename.as_ref().to_string(),
+            filename,
             o_p,
         })
     }
@@ -95,8 +95,9 @@ impl TempDirHandler {
         P1: AsRef<Path>,
     {
         let from = self.temp_dir.path().join(filename.as_ref());
-        let to = self.o_p.join(filename.as_ref());
-        tracing::debug!("move from {:?} to {:?}", from, to);
+        let to = self.o_p.parent().unwrap().join(filename.as_ref());
+        #[cfg(test)]
+        debug!("move from {:?} to {:?}", from, to);
         std::fs::rename(from, to)?;
         Ok(())
     }
