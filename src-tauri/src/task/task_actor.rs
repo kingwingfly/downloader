@@ -1,5 +1,6 @@
 use super::error::{actor_error, ActorResult};
 use crate::utils::TempDirHandler;
+
 use actix::prelude::*;
 use reqwest::Client;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
@@ -47,23 +48,27 @@ impl Actor for TaskActor {
 pub struct RunTask {
     suffix: String,
     url: Url,
+    referer: String,
     temp_dir: Arc<TempDirHandler>,
     tx: oneshot::Sender<ActorResult<()>>,
 }
 
 impl RunTask {
-    pub fn new<S>(
-        suffix: S,
+    pub fn new<S1, S2>(
+        suffix: S1,
         url: Url,
+        referer: S2,
         temp_dir: Arc<TempDirHandler>,
         tx: oneshot::Sender<ActorResult<()>>,
     ) -> Self
     where
-        S: AsRef<str>,
+        S1: AsRef<str>,
+        S2: AsRef<str>,
     {
         Self {
             suffix: suffix.as_ref().to_string(),
             url,
+            referer: referer.as_ref().to_string(),
             temp_dir,
             tx,
         }
@@ -86,7 +91,7 @@ impl Handler<RunTask> for TaskActor {
                     .build()
                     .unwrap(),
             );
-            let total = get_total(client.clone(), msg.url.clone())
+            let total = get_total(client.clone(), msg.url.clone(), &msg.referer)
                 .await
                 .unwrap_or(0);
             actor_total.fetch_add(total, Ordering::Relaxed);
@@ -98,7 +103,7 @@ impl Handler<RunTask> for TaskActor {
                     }
                     let mut resp = client
                         .get(msg.url.clone())
-                        .header("Referer", "https://www.bilibili.com/")
+                        .header("Referer", &msg.referer)
                         .header(
                             "Range",
                             format!(
@@ -262,10 +267,10 @@ impl Handler<SetFilename> for TaskActor {
 
 // endregion SetFilename Message
 
-async fn get_total(client: Arc<Client>, url: Url) -> Option<usize> {
+async fn get_total(client: Arc<Client>, url: Url, referer: &str) -> Option<usize> {
     client
         .get(url)
-        .header("Referer", "https://www.bilibili.com/")
+        .header("Referer", referer)
         .header("Range", "bytes=0-0".to_string())
         .send()
         .await
@@ -293,6 +298,7 @@ mod tests {
         let run_task = RunTask::new(
             "mp4",
             Url::parse("https://upos-sz-mirror08c.bilivideo.com/upgcxcode/66/77/1049107766/1049107766-1-30112.m4s?e=ig8euxZM2rNcNbdlhoNvNC8BqJIzNbfqXBvEqxTEto8BTrNvN0GvT90W5JZMkX_YN0MvXg8gNEV4NC8xNEV4N03eN0B5tZlqNxTEto8BTrNvNeZVuJ10Kj_g2UB02J0mN0B5tZlqNCNEto8BTrNvNC7MTX502C8f2jmMQJ6mqF2fka1mqx6gqj0eN0B599M=&uipk=5&nbs=1&deadline=1698616254&gen=playurlv2&os=08cbv&oi=3736210139&trid=db65754bb9494698aa13ec17f376d111u&mid=32280488&platform=pc&upsig=a8b17c487797cac95a5fc6e967f81eaf&uparams=e,uipk,nbs,deadline,gen,os,oi,trid,mid,platform&bvc=vod&nettype=0&orderid=0,3&buvid=&build=0&f=u_0_0&agrr=1&bw=669180&logo=80000000").unwrap(),
+            "https://www.bilibili.com/",
             temp_dir.clone(),tx
         );
         assert!(addr.send(run_task).await.is_ok());
@@ -301,6 +307,7 @@ mod tests {
         let run_task = RunTask::new(
             "aac",
             Url::parse("https://upos-sz-mirrorali.bilivideo.com/upgcxcode/66/77/1049107766/1049107766-1-30280.m4s?e=ig8euxZM2rNcNbdlhoNvNC8BqJIzNbfqXBvEqxTEto8BTrNvN0GvT90W5JZMkX_YN0MvXg8gNEV4NC8xNEV4N03eN0B5tZlqNxTEto8BTrNvNeZVuJ10Kj_g2UB02J0mN0B5tZlqNCNEto8BTrNvNC7MTX502C8f2jmMQJ6mqF2fka1mqx6gqj0eN0B599M=&uipk=5&nbs=1&deadline=1698616254&gen=playurlv2&os=alibv&oi=3736210139&trid=db65754bb9494698aa13ec17f376d111u&mid=32280488&platform=pc&upsig=7a99aaee8fa3f4466c1fe804770f3264&uparams=e,uipk,nbs,deadline,gen,os,oi,trid,mid,platform&bvc=vod&nettype=0&orderid=0,3&buvid=&build=0&f=u_0_0&agrr=1&bw=30625&logo=80000000").unwrap(),
+            "https://www.bilibili.com/",
             temp_dir.clone(),tx
         );
         assert!(addr.send(run_task).await.is_ok());

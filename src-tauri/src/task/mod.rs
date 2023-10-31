@@ -3,28 +3,26 @@ mod parser;
 mod task_actor;
 
 pub use error::TaskError;
-use tokio::sync::oneshot;
-
-use std::sync::Arc;
 
 use crate::config::get_config;
 use crate::task::parser::Parser;
 use crate::utils::TempDirHandler;
+
 use actix::{Actor, Addr};
 use error::{task_error, TaskResult};
 use parser::Info;
 use scraper::Html;
-use snafu::{OptionExt, ResultExt};
+use snafu::OptionExt;
+use std::sync::Arc;
 use task_actor::{Cancel, Continue_, Pause, Restart, Revive, RunTask, TaskActor};
+use tokio::sync::oneshot;
 use url::Url;
 use uuid::Uuid;
 
 #[cfg(test)]
 use tracing::{instrument, Level};
 
-use self::{
-    task_actor::{ProcessQuery, SetFilename},
-};
+use self::task_actor::{ProcessQuery, SetFilename};
 
 #[derive(Debug)]
 #[cfg_attr(test, derive(PartialEq))]
@@ -71,9 +69,10 @@ impl Task {
         self.addr
             .send(SetFilename(filename.as_ref().to_string()))
             .await??;
+        let referer = self.get_referer()?;
         for (i, url) in urls.into_iter().enumerate() {
             let (tx, rx) = tokio::sync::oneshot::channel();
-            let run_task = RunTask::new(format!("{i}.mp4"), url, temp_dir.clone(), tx);
+            let run_task = RunTask::new(format!("{i}.mp4"), url, &referer, temp_dir.clone(), tx);
             self.addr.send(run_task).await??;
             rx.await.unwrap()?;
         }
@@ -121,6 +120,14 @@ impl Task {
     fn get_cookie(&self) -> TaskResult<String> {
         match self.get_task_type() {
             TaskType::BiliBili => get_config("bili_cookie").context(task_error::ConfigNotFound),
+            TaskType::Unknown => task_error::UnknownTaskType.fail()?,
+        }
+    }
+
+    #[cfg_attr(test, instrument(level=Level::DEBUG, skip(self), fields(uuid=format!("<{:.5}...>", self.id.to_string())), err))]
+    fn get_referer(&self) -> TaskResult<String> {
+        match self.get_task_type() {
+            TaskType::BiliBili => Ok("https://www.bilibili.com/".to_string()),
             TaskType::Unknown => task_error::UnknownTaskType.fail()?,
         }
     }

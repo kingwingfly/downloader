@@ -1,4 +1,5 @@
 use super::error::{parse_error, ParseResult};
+
 use scraper::{Html, Selector};
 use snafu::{OptionExt, ResultExt};
 use url::Url;

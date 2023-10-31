@@ -1,13 +1,12 @@
-use std::collections::HashMap;
-use std::sync::Arc;
-
 use super::error::{bmc_error, BmcResult};
 use super::Model;
 use crate::task::Task;
+
 use snafu::OptionExt;
+use std::collections::HashMap;
+use std::sync::Arc;
 use tokio::sync::mpsc;
 use tokio::sync::oneshot::{self, Sender as OnceSender};
-
 use uuid::Uuid;
 
 type CreateResult = Result<Arc<Task>, crate::task::TaskError>;
