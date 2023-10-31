@@ -23,7 +23,6 @@ use uuid::Uuid;
 use tracing::{instrument, Level};
 
 use self::{
-    error::ActorResult,
     task_actor::{ProcessQuery, SetFilename},
 };
 

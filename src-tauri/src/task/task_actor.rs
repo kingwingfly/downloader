@@ -174,7 +174,7 @@ pub struct Cancel;
 impl Handler<Cancel> for TaskActor {
     type Result = ActorResult<()>;
 
-    fn handle(&mut self, _msg: Cancel, ctx: &mut Self::Context) -> Self::Result {
+    fn handle(&mut self, _msg: Cancel, _ctx: &mut Self::Context) -> Self::Result {
         debug!("cancel");
         self.cancel.store(true, Ordering::Relaxed);
         Ok(())

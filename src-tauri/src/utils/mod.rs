@@ -55,7 +55,7 @@ impl TempDirHandler {
         let mut f = std::fs::OpenOptions::new()
             .create(true)
             .append(true)
-            .open(&path)?;
+            .open(path)?;
         f.write_all(buf)?;
         f.sync_all()?;
         Ok(())
