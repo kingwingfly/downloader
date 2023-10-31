@@ -46,6 +46,8 @@ pub enum ActorError {
     ContentLengthUnknown,
     #[snafu()]
     NetWorkError { source: reqwest::Error },
+    #[snafu(context(suffix(false)))]
+    Cancelled,
 }
 
 pub type ActorResult<T> = Result<T, ActorError>;

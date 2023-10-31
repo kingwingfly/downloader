@@ -15,7 +15,7 @@ use error::{task_error, TaskResult};
 use parser::Info;
 use scraper::Html;
 use snafu::{OptionExt, ResultExt};
-use task_actor::{Cancel, Continue_, Pause, RunTask, TaskActor};
+use task_actor::{Cancel, Continue_, Pause, Restart, Revive, RunTask, TaskActor};
 use url::Url;
 use uuid::Uuid;
 
@@ -139,34 +139,29 @@ impl Task {
         self.addr.do_send(ProcessQuery::new(tx));
         Ok(rx.blocking_recv().unwrap().unwrap())
     }
+}
 
-    #[cfg_attr(test, instrument(level=Level::DEBUG, skip(self), fields(uuid=format!("<{:.5}...>", self.id.to_string())), err))]
-    pub fn cancel(&self) -> TaskResult<()> {
-        self.addr.do_send(Cancel);
-        Ok(())
+macro_rules! task_func {
+    (($func: ident, $msg: ident)) => {
+        #[cfg_attr(test, instrument(level=Level::DEBUG, skip(self), fields(uuid=format!("<{:.5}...>", self.id.to_string())), err))]
+        pub fn $func(&self) -> TaskResult<()> {
+            self.addr.do_send($msg);
+            Ok(())
+        }
+    };
+    ($(($func: ident, $msg: ident)),+) => {
+        $(task_func![($func, $msg)];)+
     }
+}
 
-    #[cfg_attr(test, instrument(level=Level::DEBUG, skip(self), fields(uuid=format!("<{:.5}...>", self.id.to_string())), err))]
-    pub fn pause(&self) -> TaskResult<()> {
-        self.addr.do_send(Pause);
-        Ok(())
-    }
-
-    #[cfg_attr(test, instrument(level=Level::DEBUG, skip(self), fields(uuid=format!("<{:.5}...>", self.id.to_string())), err))]
-    pub fn continue_(&self) -> TaskResult<()> {
-        self.addr.do_send(Continue_);
-        Ok(())
-    }
-
-    #[cfg_attr(test, instrument(level=Level::DEBUG, skip(self), fields(uuid=format!("<{:.5}...>", self.id.to_string())), err))]
-    pub fn revive(&self) -> TaskResult<()> {
-        Ok(())
-    }
-
-    #[cfg_attr(test, instrument(level=Level::DEBUG, skip(self), fields(uuid=format!("<{:.5}...>", self.id.to_string())), err))]
-    pub fn restart(&self) -> TaskResult<()> {
-        Ok(())
-    }
+impl Task {
+    task_func![
+        (cancel, Cancel),
+        (pause, Pause),
+        (continue_, Continue_),
+        (revive, Revive),
+        (restart, Restart)
+    ];
 }
 
 // endregion Task

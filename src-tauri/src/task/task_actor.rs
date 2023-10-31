@@ -1,4 +1,4 @@
-use super::error::ActorResult;
+use super::error::{actor_error, ActorResult};
 use crate::utils::TempDirHandler;
 use actix::prelude::*;
 use reqwest::Client;
@@ -13,6 +13,7 @@ use url::Url;
 #[derive(Debug)]
 pub struct TaskActor {
     paused: Arc<AtomicBool>,
+    cancel: Arc<AtomicBool>,
     total: Arc<AtomicUsize>,
     finished: Arc<AtomicUsize>,
     filename: Option<String>,
@@ -24,6 +25,7 @@ impl TaskActor {
         crate::config::config_init().unwrap();
         Self {
             paused: Arc::new(AtomicBool::new(false)),
+            cancel: Arc::new(AtomicBool::new(false)),
             total: Arc::new(AtomicUsize::new(0)),
             finished: Arc::new(AtomicUsize::new(0)),
             filename: None,
@@ -71,12 +73,12 @@ impl RunTask {
 impl Handler<RunTask> for TaskActor {
     type Result = ActorResult<()>;
 
-    #[instrument(level=Level::DEBUG, skip(self, msg, ctx), fields(url=msg.url.as_str(), format=msg.suffix), err)]
-    fn handle(&mut self, msg: RunTask, ctx: &mut Self::Context) -> Self::Result {
+    #[instrument(level=Level::DEBUG, skip(self, msg, _ctx), fields(url=msg.url.as_str(), format=msg.suffix), err)]
+    fn handle(&mut self, msg: RunTask, _ctx: &mut Self::Context) -> Self::Result {
         let actor_total = self.total.clone();
         let actor_finished = self.finished.clone();
         let pause = self.paused.clone();
-        let addr = ctx.address();
+        let cancel = self.cancel.clone();
         actix_rt::spawn(async move {
             let client = Arc::new(
                 reqwest::Client::builder()
@@ -91,6 +93,9 @@ impl Handler<RunTask> for TaskActor {
             let mut finished = 0;
             while finished < total {
                 if !pause.load(Ordering::Relaxed) {
+                    if cancel.load(Ordering::Relaxed) {
+                        break;
+                    }
                     let mut resp = client
                         .get(msg.url.clone())
                         .header("Referer", "https://www.bilibili.com/")
@@ -114,7 +119,11 @@ impl Handler<RunTask> for TaskActor {
                     tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
                 }
             }
-            msg.tx.send(Ok(())).unwrap();
+            if cancel.load(Ordering::Relaxed) {
+                msg.tx.send(actor_error::Cancelled.fail()).unwrap();
+            } else {
+                msg.tx.send(Ok(())).unwrap();
+            }
         });
         Ok(())
     }
@@ -166,15 +175,47 @@ impl Handler<Cancel> for TaskActor {
     type Result = ActorResult<()>;
 
     fn handle(&mut self, _msg: Cancel, ctx: &mut Self::Context) -> Self::Result {
-        ctx.stop();
+        debug!("cancel");
+        self.cancel.store(true, Ordering::Relaxed);
         Ok(())
     }
 }
 
 // endregion Cancel Message
 
-// region ProcessQuery Message
+// region Revive Message
 
+#[derive(Message)]
+#[rtype(result = "ActorResult<()>")]
+pub struct Revive;
+
+impl Handler<Revive> for TaskActor {
+    type Result = ActorResult<()>;
+
+    fn handle(&mut self, _msg: Revive, _ctx: &mut Self::Context) -> Self::Result {
+        todo!()
+    }
+}
+
+// endregion Revive Message
+
+// region Restart Message
+
+#[derive(Message)]
+#[rtype(result = "ActorResult<()>")]
+pub struct Restart;
+
+impl Handler<Restart> for TaskActor {
+    type Result = ActorResult<()>;
+
+    fn handle(&mut self, _msg: Restart, _ctx: &mut Self::Context) -> Self::Result {
+        todo!()
+    }
+}
+
+// endregion Restart Message
+
+// region ProcessQuery Message
 #[derive(Message)]
 #[rtype(result = "ActorResult<()>")]
 pub struct ProcessQuery {

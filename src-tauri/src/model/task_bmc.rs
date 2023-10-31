@@ -112,9 +112,9 @@ impl TaskBmc {
 
 impl Drop for TaskBmc {
     fn drop(&mut self) {
-        // self.model.tasks.iter().for_each(|t| {
-        //     t.cancel().ok();
-        // });
+        self.model.tasks.iter().for_each(|t| {
+            t.cancel().ok();
+        });
         self.tx.blocking_send(None).ok();
         self.jh.take().unwrap().join().ok();
         println!("task bmc droped");
