@@ -14,15 +14,15 @@ use parser::Info;
 use scraper::Html;
 use snafu::OptionExt;
 use std::sync::Arc;
-use task_actor::{Cancel, Continue_, Pause, Restart, Revive, RunTask, TaskActor};
+use task_actor::{
+    Cancel, Continue_, Pause, ProgressQuery, Restart, Revive, RunTask, SetFilename, TaskActor,
+};
 use tokio::sync::oneshot;
 use url::Url;
 use uuid::Uuid;
 
 #[cfg(test)]
 use tracing::{instrument, Level};
-
-use self::task_actor::{ProcessQuery, SetFilename};
 
 #[derive(Debug)]
 #[cfg_attr(test, derive(PartialEq))]
@@ -70,10 +70,14 @@ impl Task {
             .send(SetFilename(filename.as_ref().to_string()))
             .await??;
         let referer = self.get_referer()?;
+        let mut rxs = vec![];
         for (i, url) in urls.into_iter().enumerate() {
             let (tx, rx) = tokio::sync::oneshot::channel();
             let run_task = RunTask::new(format!("{i}.mp4"), url, &referer, temp_dir.clone(), tx);
             self.addr.send(run_task).await??;
+            rxs.push(rx);
+        }
+        for rx in rxs {
             rx.await.unwrap()?;
         }
         temp_dir.save();
@@ -140,9 +144,9 @@ impl Task {
         }
     }
 
-    pub fn process_query(&self) -> TaskResult<(String, usize, usize)> {
+    pub fn progress_query(&self) -> TaskResult<(String, usize, usize)> {
         let (tx, rx) = oneshot::channel();
-        self.addr.do_send(ProcessQuery::new(tx));
+        self.addr.do_send(ProgressQuery::new(tx));
         Ok(rx.blocking_recv().unwrap().unwrap())
     }
 }

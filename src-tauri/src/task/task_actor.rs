@@ -220,26 +220,26 @@ impl Handler<Restart> for TaskActor {
 
 // endregion Restart Message
 
-// region ProcessQuery Message
+// region ProgressQuery Message
 #[derive(Message)]
 #[rtype(result = "ActorResult<()>")]
-pub struct ProcessQuery {
+pub struct ProgressQuery {
     tx: oneshot::Sender<ActorResult<(String, usize, usize)>>,
 }
 
-impl ProcessQuery {
+impl ProgressQuery {
     pub fn new(tx: oneshot::Sender<ActorResult<(String, usize, usize)>>) -> Self {
         Self { tx }
     }
 }
 
-impl Handler<ProcessQuery> for TaskActor {
+impl Handler<ProgressQuery> for TaskActor {
     type Result = ActorResult<()>;
 
-    fn handle(&mut self, msg: ProcessQuery, _ctx: &mut Self::Context) -> Self::Result {
+    fn handle(&mut self, msg: ProgressQuery, _ctx: &mut Self::Context) -> Self::Result {
         msg.tx
             .send(Ok((
-                self.filename.as_deref().unwrap().to_owned(),
+                self.filename.as_deref().unwrap_or("unknown").to_owned(),
                 self.finished.load(Ordering::Relaxed),
                 self.total.load(Ordering::Relaxed),
             )))
@@ -248,7 +248,7 @@ impl Handler<ProcessQuery> for TaskActor {
     }
 }
 
-// endregion ProcessQuery Message
+// endregion ProgressQuery Message
 
 // region SetFilename Message
 

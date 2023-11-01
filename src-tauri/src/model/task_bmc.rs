@@ -3,7 +3,6 @@ use super::Model;
 use crate::task::Task;
 
 use snafu::OptionExt;
-use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 use tokio::sync::oneshot::{self, Sender as OnceSender};
@@ -96,14 +95,13 @@ impl TaskBmc {
         Ok(())
     }
 
-    pub fn process(&self) -> BmcResult<HashMap<String, (usize, usize)>> {
-        let mut hp = HashMap::new();
+    pub fn progress(&self) -> BmcResult<Vec<(String, usize, usize, String)>> {
+        let mut ret = vec![];
         for t in self.model.tasks.iter() {
-            let (filename, finished, total) = t.process_query().unwrap();
-            println!("{}: {}/ {}", filename, finished, total);
-            hp.insert(filename, (finished, total));
+            let (filname, finished, total) = t.progress_query().unwrap();
+            ret.push((filname, finished, total, t.id.to_string()));
         }
-        Ok(hp)
+        Ok(ret)
     }
 
     bmc_func![cancel, pause, continue_, revive, restart];

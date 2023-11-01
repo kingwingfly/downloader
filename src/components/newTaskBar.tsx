@@ -3,14 +3,17 @@ import { FormEvent } from "react";
 import Input from "./input";
 import { invoke } from "@tauri-apps/api";
 import { echo } from "@/utils/echo";
+import { useRouter } from "next/navigation";
 
 export default function NewTaskBar() {
+    const router = useRouter()
     const onsubmit = async (e: FormEvent<HTMLFormElement>) => {
         e.preventDefault()
         let form = new FormData(e.currentTarget)
         let url = form.get('url')?.toString()
         let ret = window.__TAURI__ ? await invoke("create", { url }) : echo(url)
         console.log(ret)
+        router.back()
     }
     return (
         <>

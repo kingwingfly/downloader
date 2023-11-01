@@ -1,4 +1,4 @@
-import BtnLink from "./BtnLink";
+import BtnLink from "./btnLink";
 
 export default function HomeBtn() {
     return <BtnLink href="/" content="Back Home" />
