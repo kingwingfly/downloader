@@ -17,10 +17,12 @@ export default function TaskCard({ info }: { info: CardInfo }) {
                 <h1 className="text-xl font-bold mb-2">{info[0]}</h1>
                 <div className="text-gray-700">{`${finished}/${total} Mb`}</div>
                 <ProgressBar progress={progress} />
-                <BtnInvoke func={"pause"} params={{ id: info[3] }} desc="Pause" />
-                <BtnInvoke func={"continue_"} params={{ id: info[3] }} desc="Continue" />
-                <BtnInvoke func={"cancel"} params={{ id: info[3] }} desc="Cancel" />
-                <BtnInvoke func={"remove"} params={{ id: info[3] }} desc="Remove" />
+                <div className="btns pt-4 flex justify-center">
+                    <BtnInvoke func={"pause"} params={{ id: info[3] }} desc="Pause" />
+                    <BtnInvoke func={"continue_"} params={{ id: info[3] }} desc="Continue" />
+                    <BtnInvoke func={"cancel"} params={{ id: info[3] }} desc="Cancel" />
+                    <BtnInvoke func={"remove"} params={{ id: info[3] }} desc="Remove" />
+                </div>
             </div>
         </>
     )
