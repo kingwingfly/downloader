@@ -28,7 +28,7 @@ export default function TaskList() {
         <>{
             infos.infos.length !== 0
                 ?
-                <div className="flex-col max-h-screen overflow-auto">{infos.infos.map(info => <TaskCard key={info[3]} info={info} />)}</div>
+                <div className="pt-4 flex-col max-h-screen overflow-auto">{infos.infos.map(info => <TaskCard key={info[3]} info={info} />)}</div>
                 :
                 <div>Empty</div>
         }</>

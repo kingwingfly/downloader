@@ -1,11 +1,11 @@
-export default function ProgressBar({ progress }: { progress: number }) {
+export default function ProgressBar({ progress, state }: { progress: number, state: string }) {
     let progressx100 = (progress * 100).toFixed(0)
     return (
         <div className="relative pt-1">
             <div className="flex mb-2 items-center justify-between">
                 <div>
                     <span className="text-xs font-semibold inline-block py-1 px-2 uppercase rounded-full text-teal-600 bg-teal-200">
-                        Progress
+                        {state}
                     </span>
                 </div>
                 <div className="text-right">

@@ -144,7 +144,7 @@ impl Task {
         }
     }
 
-    pub fn progress_query(&self) -> TaskResult<(String, usize, usize)> {
+    pub fn progress_query(&self) -> TaskResult<(String, usize, usize, String)> {
         let (tx, rx) = oneshot::channel();
         self.addr.do_send(ProgressQuery::new(tx));
         Ok(rx.blocking_recv().unwrap().unwrap())

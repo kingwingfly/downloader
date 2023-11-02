@@ -45,7 +45,7 @@ macro_rules! gen_tauri_task_handler {
 gen_tauri_task_handler![cancel, pause, continue_, remove];
 
 #[tauri::command]
-fn progress() -> Vec<(String, usize, usize, String)> {
+fn progress() -> Vec<(String, usize, usize, String, String)> {
     let task_bmc = TASK_BMC.get().unwrap().lock().unwrap();
     let ret = task_bmc.borrow().progress().unwrap();
     ret

@@ -95,11 +95,12 @@ impl TaskBmc {
         Ok(())
     }
 
-    pub fn progress(&self) -> BmcResult<Vec<(String, usize, usize, String)>> {
+    // return (title finished total uuid state)
+    pub fn progress(&self) -> BmcResult<Vec<(String, usize, usize, String, String)>> {
         let mut ret = vec![];
         for t in self.model.tasks.iter() {
-            let (filname, finished, total) = t.progress_query().unwrap();
-            ret.push((filname, finished, total, t.id.to_string()));
+            let (filname, finished, total, state) = t.progress_query().unwrap();
+            ret.push((filname, finished, total, t.id.to_string(), state));
         }
         Ok(ret)
     }

@@ -224,11 +224,11 @@ impl Handler<Restart> for TaskActor {
 #[derive(Message)]
 #[rtype(result = "ActorResult<()>")]
 pub struct ProgressQuery {
-    tx: oneshot::Sender<ActorResult<(String, usize, usize)>>,
+    tx: oneshot::Sender<ActorResult<(String, usize, usize, String)>>,
 }
 
 impl ProgressQuery {
-    pub fn new(tx: oneshot::Sender<ActorResult<(String, usize, usize)>>) -> Self {
+    pub fn new(tx: oneshot::Sender<ActorResult<(String, usize, usize, String)>>) -> Self {
         Self { tx }
     }
 }
@@ -237,11 +237,23 @@ impl Handler<ProgressQuery> for TaskActor {
     type Result = ActorResult<()>;
 
     fn handle(&mut self, msg: ProgressQuery, _ctx: &mut Self::Context) -> Self::Result {
+        let finished = self.finished.load(Ordering::Relaxed);
+        let total = self.total.load(Ordering::Relaxed);
+        let state = if self.paused.load(Ordering::Relaxed) {
+            "paused"
+        } else if self.cancel.load(Ordering::Relaxed) {
+            "cancelled"
+        } else if total == finished && total != 0 {
+            "finished"
+        } else {
+            "downloading"
+        };
         msg.tx
             .send(Ok((
                 self.filename.as_deref().unwrap_or("unknown").to_owned(),
-                self.finished.load(Ordering::Relaxed),
-                self.total.load(Ordering::Relaxed),
+                finished,
+                total,
+                state.to_string(),
             )))
             .unwrap();
         Ok(())
