@@ -30,8 +30,10 @@ actix-rt = "2.9.0"
 new_mime_guess = "4.0.1"
 mime = "0.3.17"
 sanitize-filename = "0.5.0"
-rsa = "0.9.3"
+rsa = { version = "0.9.3", features = ["serde"] }
 rand = "0.8.5"
+keyring = "2.0.5"
+dirs-next = "2.0.0"
 
 [dev-dependencies]
 
