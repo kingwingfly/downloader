@@ -1,5 +1,7 @@
 use config::ConfigError;
 use config::{Config, Map, Source, Value, ValueKind};
+use rand::rngs::ThreadRng;
+use rsa::{Pkcs1v15Encrypt, RsaPrivateKey, RsaPublicKey};
 use std::{collections::HashSet, sync::OnceLock};
 
 static APP_CONFIG: OnceLock<Result<Config, ConfigError>> = OnceLock::new();
@@ -70,6 +72,34 @@ where
     }
 }
 
+fn encrypt<K, V>(
+    origin: &HashSet<(K, V)>,
+    rng: &mut ThreadRng,
+    pub_key: RsaPublicKey,
+) -> Result<Vec<u8>, Box<dyn std::error::Error + Send + Sync + 'static>>
+where
+    K: AsRef<str> + serde::Serialize,
+    V: Into<ValueKind> + AsRef<str> + serde::Serialize,
+{
+    let origin = serde_json::to_string(origin).unwrap();
+    let encrypted = pub_key.encrypt(rng, Pkcs1v15Encrypt, origin.as_bytes())?;
+    Ok(encrypted)
+}
+
+fn decrypt<K, V>(
+    encrypted: Vec<u8>,
+    priv_key: RsaPrivateKey,
+) -> Result<HashSet<(K, V)>, Box<dyn std::error::Error + Send + Sync + 'static>>
+where
+    for<'de> K: AsRef<str> + serde::Deserialize<'de> + std::cmp::Eq + std::hash::Hash,
+    for<'de> V:
+        Into<ValueKind> + AsRef<str> + serde::Deserialize<'de> + std::cmp::Eq + std::hash::Hash,
+{
+    let decrypted = priv_key.decrypt(Pkcs1v15Encrypt, &encrypted)?;
+    let origin = serde_json::from_str(std::str::from_utf8(&decrypted)?)?;
+    Ok(origin)
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -79,5 +109,20 @@ mod test {
         assert!(config_init().is_ok());
         assert_eq!(get_config("user-agent").unwrap(), USER_AGENT);
         assert_ne!(get_config("cookie").unwrap(), "")
+    }
+
+    #[test]
+    fn encrypt_test() {
+        let mut rng = rand::thread_rng();
+        let bits = 2048;
+        let priv_key = RsaPrivateKey::new(&mut rng, bits).expect("failed to generate a key");
+        let pub_key = RsaPublicKey::from(&priv_key);
+        let orgin = HashSet::from([("1".to_string(), "1".to_string())]);
+        let encrypted = encrypt(&orgin, &mut rng, pub_key);
+        assert!(encrypted.is_ok());
+        let encrypted = encrypted.unwrap();
+        let decrypted = decrypt(encrypted, priv_key);
+        assert!(decrypted.is_ok());
+        assert_eq!(decrypted.unwrap(), orgin);
     }
 }

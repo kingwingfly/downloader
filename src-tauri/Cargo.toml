@@ -30,6 +30,8 @@ actix-rt = "2.9.0"
 new_mime_guess = "4.0.1"
 mime = "0.3.17"
 sanitize-filename = "0.5.0"
+rsa = "0.9.3"
+rand = "0.8.5"
 
 [dev-dependencies]
 
