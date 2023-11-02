@@ -4,7 +4,6 @@
 use model::TaskBmc;
 use std::{
     cell::RefCell,
-    collections::HashMap,
     sync::{Mutex, OnceLock},
 };
 
