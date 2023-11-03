@@ -5,22 +5,25 @@ use config::{Config, Source, Value, ValueKind};
 use std::collections::HashMap;
 use std::{collections::HashSet, sync::OnceLock};
 
-static APP_CONFIG: OnceLock<Config> = OnceLock::new();
+static mut APP_CONFIG: OnceLock<Config> = OnceLock::new();
 const USER_AGENT: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.1 Safari/605.1.15";
 
 pub fn config_init() -> Result<(), ConfigError> {
-    let config = Config::builder()
-        .set_default("user-agent", USER_AGENT)?
-        .set_default("save_dir", dirs_next::download_dir().unwrap().to_str())?
-        .set_default("bili_cookie", "")?
-        .add_source(KeySource::new())
-        .build()?;
-    APP_CONFIG.set(config).unwrap();
+    unsafe {
+        APP_CONFIG.take();
+        let config = Config::builder()
+            .set_default("user-agent", USER_AGENT)?
+            .set_default("save_dir", dirs_next::download_dir().unwrap().to_str())?
+            .set_default("bili_cookie", "")?
+            .add_source(KeySource::new())
+            .build()?;
+        APP_CONFIG.set(config).unwrap();
+    }
     Ok(())
 }
 
 pub fn get_config<S: AsRef<str>>(key: S) -> Option<String> {
-    APP_CONFIG.get()?.get_string(key.as_ref()).ok()
+    unsafe { APP_CONFIG.get()?.get_string(key.as_ref()).ok() }
 }
 
 #[derive(Debug, Clone, Default)]

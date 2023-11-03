@@ -22,8 +22,6 @@ pub struct TaskActor {
 
 impl TaskActor {
     pub fn new() -> Self {
-        #[cfg(test)]
-        crate::config::config_init().unwrap();
         Self {
             paused: Arc::new(AtomicBool::new(false)),
             cancel: Arc::new(AtomicBool::new(false)),
@@ -304,6 +302,7 @@ mod tests {
     #[tracing_test::traced_test]
     #[actix_rt::test]
     async fn run_task_test() {
+        crate::config::config_init().unwrap();
         let addr = TaskActor::new().start();
         let temp_dir = Arc::new(TempDirHandler::new("file").unwrap());
         let (tx, rx) = tokio::sync::oneshot::channel();

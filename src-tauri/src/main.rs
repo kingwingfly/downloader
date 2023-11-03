@@ -52,7 +52,6 @@ fn progress() -> Vec<(String, usize, usize, String, String)> {
 
 fn main() {
     crate::tracing_helper::init_tracing_subscriber();
-    crate::config::config_init().unwrap();
     TASK_BMC.get_or_init(|| Mutex::new(RefCell::new(TaskBmc::new())));
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![

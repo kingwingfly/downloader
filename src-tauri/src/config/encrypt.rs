@@ -20,8 +20,7 @@ impl Encrypter {
         let entry = key_ring_entry();
         match entry.get_password() {
             Ok(serded_enc) => serde_json::from_str(&serded_enc).unwrap(),
-            Err(e) => {
-                println!("{e:?}");
+            Err(_) => {
                 let new_enc = Encrypter::new();
                 entry
                     .set_password(&serde_json::to_string(&new_enc).unwrap())

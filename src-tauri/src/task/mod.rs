@@ -45,6 +45,7 @@ impl Task {
     where
         S: AsRef<str>,
     {
+        crate::config::config_init().ok();
         Ok(Task {
             id: Uuid::new_v4(),
             url: Url::parse(url.as_ref())?,
@@ -86,7 +87,6 @@ impl Task {
 
     #[cfg_attr(test, instrument(level=Level::DEBUG, skip(self), fields(uuid=format!("<{:.5}...>", self.id.to_string()), rs), err))]
     async fn get_html(&self) -> TaskResult<Html> {
-        crate::config::config_init().unwrap();
         // region get_resp
         let user_agent = get_config("user-agent").context(task_error::ConfigNotFound)?;
         let cookie = self.get_cookie()?;
@@ -197,14 +197,12 @@ mod tests {
 
     #[actix_rt::test]
     async fn get_test() {
-        assert!(crate::config::config_init().is_ok());
         let task = Task::new("https://bilibili.com").unwrap();
         assert!(task.get_html().await.is_ok());
     }
 
     #[actix_rt::test]
     async fn get_task_type_test() {
-        assert!(crate::config::config_init().is_ok());
         let task = Task::new("https://bilibili.com").unwrap();
         assert_eq!(task.get_task_type(), TaskType::BiliBili);
         let task = Task::new("https://www.bilibili.com/video/BV1NN411F7HE").unwrap();
@@ -214,7 +212,6 @@ mod tests {
     #[tracing_test::traced_test]
     #[actix_rt::test]
     async fn task_go_test() {
-        assert!(crate::config::config_init().is_ok());
         let task = Arc::new(Task::new("https://www.bilibili.com/video/BV1NN411F7HE").unwrap());
         let task_c = task.clone();
         let jh = actix_rt::spawn(async move { task_c.go().await });
