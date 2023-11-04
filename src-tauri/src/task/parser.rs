@@ -59,6 +59,11 @@ impl Parser {
         let mut videos = parse("video")?;
         let mut audios = parse("audio")?;
 
+        // Maybe Hi-res exists
+        if let Some(a) = info_json.pointer("/data/flac/audio") {
+            audios.push(serde_json::from_value(a.clone()).unwrap());
+        }
+
         ret.push(videos.pop().unwrap());
         ret.push(audios.pop().unwrap());
 
@@ -77,7 +82,7 @@ mod tests {
     #[tracing_test::traced_test]
     #[actix_rt::test]
     async fn parse_bili_test() {
-        let task = Task::new("https://www.bilibili.com/video/BV1NN411F7HE").unwrap();
+        let task = Task::new("https://www.bilibili.com/video/BV1Z84y1D7DJ").unwrap();
         let html = task.get_html().await.unwrap();
         let ret = Parser::html(html).bilibili().unwrap();
         for info in ret.1 {

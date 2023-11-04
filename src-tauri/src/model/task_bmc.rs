@@ -141,20 +141,12 @@ mod tests {
     #[test]
     fn bmc_test() {
         let mut task_bmc = TaskBmc::new();
-        // let id1 = task_bmc
-        //     .create("https://www.bilibili.com/video/BV1NN411F7HE")
-        //     .unwrap();
-        // assert!(task_bmc.cancel(id1).is_ok());
-        let id2 = task_bmc
+        let id = task_bmc
             .create("https://www.bilibili.com/video/BV1NN411F7HE")
             .unwrap();
         std::thread::sleep(std::time::Duration::from_secs(2));
-        assert!(task_bmc.pause(id2).is_ok());
+        assert!(task_bmc.pause(id).is_ok());
         std::thread::sleep(std::time::Duration::from_secs(2));
-        assert!(task_bmc.continue_(id2).is_ok());
-        // std::thread::sleep(std::time::Duration::from_secs(10));
-
-        // assert!(task_bmc.revive(id1).is_ok());
-        // assert!(task_bmc.restart(id1).is_ok());
+        assert!(task_bmc.continue_(id).is_ok());
     }
 }

@@ -212,7 +212,7 @@ mod tests {
     #[tracing_test::traced_test]
     #[actix_rt::test]
     async fn task_go_test() {
-        let task = Arc::new(Task::new("https://www.bilibili.com/video/BV1NN411F7HE").unwrap());
+        let task = Arc::new(Task::new("https://www.bilibili.com/video/BV1Z84y1D7DJ").unwrap());
         let task_c = task.clone();
         let jh = actix_rt::spawn(async move { task_c.go().await });
         tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
