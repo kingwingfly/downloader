@@ -64,7 +64,8 @@ impl TempDirHandler {
     pub fn save(&self) {
         #[cfg(test)]
         debug!("saving");
-        let mut cmd = std::process::Command::new("/usr/local/bin/ffmpeg");
+        let mut cmd =
+            std::process::Command::new(get_config("ffmpeg").unwrap_or("ffmpeg".to_string()));
         for path in std::fs::read_dir(self.temp_dir.path()).unwrap() {
             let path = path.unwrap();
             match new_mime_guess::from_path(path.path()).first() {

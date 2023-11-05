@@ -72,6 +72,12 @@ This is a downloader, I have implemented bilibili download now. This downloader 
 
 The config or the cookies you store in this app will be encrypted by `rsa`, and the private key will be store using `keyring` in your system's key keeper (such as key-chain on macOS).
 
+### Important
+
+This app uses ffmpeg to merge the video and audio, so you should add ffmpeg to env path or config it in config page. On macOS, you should config full path of `ffmpeg`, for binary on macOS can not be invoked directly by name. 
+
+![config ffmpeg](/screenshots/config_ffmpeg.png)
+
 
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
