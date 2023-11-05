@@ -25,11 +25,7 @@ export default function ConfigForm() {
 		let form = new FormData(e.currentTarget)
 		let json = Object.fromEntries(form)
 		await invoke("upgrade_config", { json })
-		let new_config: ConfigForm = {}
-		for (const key in json) {
-			new_config[key] = json[key].toString()
-		}
-		setConfig(new_config)
+		setConfig(old => old)
 	}
 
 	return (
@@ -40,7 +36,7 @@ export default function ConfigForm() {
 						<div key={key} className="grid grid-cols-3 mt-2 place-content-center">
 							<label className="col-start-1 col-span-1 place-items-center mx-2 py-2"> {key} </label>
 							<div className="col-start-2 col-span-2">
-								<Input name={key} defaultValue={config[key]} required={false} />
+								<Input name={key} defaultValue={config[key]} />
 							</div>
 						</div>
 					)

@@ -39,6 +39,3 @@ next-env.d.ts
 
 # ide
 .vscode
-
-target/
-package-lock.json
