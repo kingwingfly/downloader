@@ -1,6 +1,6 @@
 'use client'
 
-import { invoke } from "@tauri-apps/api";
+import { invoke } from "@tauri-apps/api/tauri";
 
 interface invoke {
     func: string,

@@ -1,8 +1,7 @@
 'use client'
 import { FormEvent } from "react";
 import Input from "./input";
-import { invoke } from "@tauri-apps/api";
-import { echo } from "@/utils/echo";
+import { invoke } from "@tauri-apps/api/tauri";
 import { useRouter } from "next/navigation";
 
 export default function NewTaskBar() {
