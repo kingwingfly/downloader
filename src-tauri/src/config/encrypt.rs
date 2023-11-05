@@ -15,7 +15,7 @@ impl Encrypter {
         let bits = if cfg!(not(target_os = "windows")) {
             2048
         } else {
-            1024
+            1200
         };
         let priv_key = RsaPrivateKey::new(&mut rng, bits).expect("failed to generate a key");
         #[cfg(not(target_os = "windows"))]
@@ -33,10 +33,6 @@ impl Encrypter {
             Ok(serded_enc) => Ok(serde_json::from_str(&serded_enc).unwrap()),
             Err(_) => {
                 let new_enc = Encrypter::new();
-                println!(
-                    "{}",
-                    serde_json::to_string(&new_enc).unwrap().as_bytes().len()
-                );
                 entry.set_password(&serde_json::to_string(&new_enc).unwrap())?;
                 Ok(new_enc)
             }

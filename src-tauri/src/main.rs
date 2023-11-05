@@ -51,7 +51,6 @@ fn show_config() -> HashMap<String, String> {
 
 #[tauri::command]
 fn upgrade_config(json: HashMap<String, String>) {
-    dbg!(&json);
     crate::config::upgrade_config(json).ok();
 }
 
