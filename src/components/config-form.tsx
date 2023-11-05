@@ -34,7 +34,7 @@ export default function ConfigForm() {
 
 	return (
 		<>
-			<form className="flex flex-col place-items-center overflow-scroll" onSubmit={(e) => { e.preventDefault(); upgrade(e); }}>
+			<form className="flex flex-col place-items-center overflow-y-auto" onSubmit={(e) => { e.preventDefault(); upgrade(e); }}>
 				{Object.keys(config).map((key) => {
 					return (
 						<div key={key} className="grid grid-cols-3 mt-2 place-content-center">
