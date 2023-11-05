@@ -119,7 +119,12 @@ impl KeySource {
             .join("downloader");
         std::fs::create_dir_all(&config_dir).unwrap();
         let encrypter = encrypt::Encrypter::from_key_ring()?;
+        dbg!(&self.inner);
         for (filename, data) in self.inner.iter() {
+            if data.to_string().len() == 0 {
+                std::fs::remove_file(config_dir.join(filename)).unwrap();
+                continue;
+            }
             let encrypted = encrypter.encrypt(&data.to_string()).unwrap();
             std::fs::write(config_dir.join(format!("{filename}_new")), &encrypted).unwrap();
             std::fs::rename(
@@ -191,11 +196,11 @@ mod test {
     fn upgrade_config_test() {
         let mut keysource = KeySource::new().unwrap();
         keysource
-            .upgrade(HashSet::from([("hello", "world")]))
+            .upgrade(HashSet::from([("hello", USER_AGENT)]))
             .unwrap();
-        assert_eq!(keysource.inner["hello"].to_string(), "world");
+        assert_eq!(keysource.inner["hello"].to_string(), USER_AGENT);
         let keysource = KeySource::new().unwrap();
-        assert_eq!(keysource.inner["hello"].to_string(), "world");
+        assert_eq!(keysource.inner["hello"].to_string(), USER_AGENT);
     }
 
     #[test]

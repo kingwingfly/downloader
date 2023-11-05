@@ -13,9 +13,7 @@ use error::{task_error, TaskResult};
 use scraper::Html;
 use snafu::OptionExt;
 use std::sync::Arc;
-use task_actor::{
-    Cancel, Continue_, Pause, ProgressQuery, Restart, Revive, RunTask, SetFilename, TaskActor,
-};
+use task_actor::{Cancel, Continue_, Pause, ProgressQuery, RunTask, SetFilename, TaskActor};
 use tokio::sync::oneshot;
 use url::Url;
 use uuid::Uuid;

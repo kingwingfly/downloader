@@ -5,16 +5,26 @@ use rsa::{Pkcs1v15Encrypt, RsaPrivateKey, RsaPublicKey};
 #[cfg_attr(test, derive(Debug, PartialEq))]
 pub struct Encrypter {
     priv_key: RsaPrivateKey,
+    #[cfg(not(target_os = "windows"))]
     pub_key: RsaPublicKey,
 }
 
 impl Encrypter {
     fn new() -> Self {
         let mut rng = rand::thread_rng();
-        let bits = 2048;
+        let bits = if cfg!(not(target_os = "windows")) {
+            2048
+        } else {
+            1200
+        };
         let priv_key = RsaPrivateKey::new(&mut rng, bits).expect("failed to generate a key");
+        #[cfg(not(target_os = "windows"))]
         let pub_key = RsaPublicKey::from(&priv_key);
-        Self { priv_key, pub_key }
+        Self {
+            priv_key,
+            #[cfg(not(target_os = "windows"))]
+            pub_key,
+        }
     }
 
     pub fn from_key_ring() -> ConfigResult<Self> {
@@ -35,7 +45,11 @@ impl Encrypter {
     {
         let mut rng = rand::thread_rng();
         let origin = serde_json::to_vec(origin).unwrap();
+        #[cfg(not(target_os = "windows"))]
         let encrypted = self.pub_key.encrypt(&mut rng, Pkcs1v15Encrypt, &origin)?;
+        #[cfg(target_os = "windows")]
+        let encrypted =
+            RsaPublicKey::from(&self.priv_key).encrypt(&mut rng, Pkcs1v15Encrypt, &origin)?;
         Ok(encrypted)
     }
 
