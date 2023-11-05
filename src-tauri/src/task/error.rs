@@ -15,7 +15,7 @@ pub enum TaskError {
     #[snafu(context(suffix(false)))]
     UnknownTaskType,
     #[snafu(context(suffix(false)))]
-    ConfigNotFound,
+    ConfigNotFound {},
     #[snafu(context(false))]
     SaveError { source: ActorError },
     #[snafu(context(false))]

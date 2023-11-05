@@ -7,7 +7,7 @@ pub fn init_tracing_subscriber() {
         .with_file(false)
         .with_line_number(false)
         .with_max_level(Level::DEBUG)
-        .with_env_filter(EnvFilter::from_default_env())
+        .with_env_filter(EnvFilter::default())
         .init();
     tracing::debug!("tracing started");
 }

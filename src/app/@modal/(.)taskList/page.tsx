@@ -1,7 +1,7 @@
 import Modal from "@/components/modal";
 import TaskList from "@/components/taskList";
 
-export default function newTaskModal() {
+export default function taskListModal() {
     return (
         <Modal>
             <TaskList />

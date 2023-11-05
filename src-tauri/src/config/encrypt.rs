@@ -1,3 +1,4 @@
+use super::error::ConfigResult;
 use rsa::{Pkcs1v15Encrypt, RsaPrivateKey, RsaPublicKey};
 
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -16,24 +17,19 @@ impl Encrypter {
         Self { priv_key, pub_key }
     }
 
-    pub fn from_key_ring() -> Self {
-        let entry = key_ring_entry();
+    pub fn from_key_ring() -> ConfigResult<Self> {
+        let entry = keyring_entry();
         match entry.get_password() {
-            Ok(serded_enc) => serde_json::from_str(&serded_enc).unwrap(),
+            Ok(serded_enc) => Ok(serde_json::from_str(&serded_enc).unwrap()),
             Err(_) => {
                 let new_enc = Encrypter::new();
-                entry
-                    .set_password(&serde_json::to_string(&new_enc).unwrap())
-                    .unwrap();
-                new_enc
+                entry.set_password(&serde_json::to_string(&new_enc).unwrap())?;
+                Ok(new_enc)
             }
         }
     }
 
-    pub fn encrypt<I>(
-        &self,
-        origin: &I,
-    ) -> Result<Vec<u8>, Box<dyn std::error::Error + Send + Sync + 'static>>
+    pub fn encrypt<I>(&self, origin: &I) -> ConfigResult<Vec<u8>>
     where
         I: serde::Serialize,
     {
@@ -43,10 +39,7 @@ impl Encrypter {
         Ok(encrypted)
     }
 
-    pub fn decrypt<R>(
-        &self,
-        encrypted: &[u8],
-    ) -> Result<R, Box<dyn std::error::Error + Send + Sync + 'static>>
+    pub fn decrypt<R>(&self, encrypted: &[u8]) -> ConfigResult<R>
     where
         for<'de> R: serde::Deserialize<'de>,
     {
@@ -56,25 +49,9 @@ impl Encrypter {
     }
 }
 
-#[cfg(not(test))]
-fn key_ring_entry() -> keyring::Entry {
+fn keyring_entry() -> keyring::Entry {
     let user = std::env::var("USER").unwrap_or("downloader user".to_string());
     keyring::Entry::new_with_target("user", "downloader", &user).unwrap()
-}
-
-#[cfg(test)]
-static ENCRYPTER: std::sync::OnceLock<Encrypter> = std::sync::OnceLock::new();
-
-#[cfg(test)]
-fn key_ring_entry() -> keyring::Entry {
-    keyring::set_default_credential_builder(keyring::mock::default_credential_builder());
-    let user = std::env::var("USER").unwrap_or("downloader user".to_string());
-    let entry = keyring::Entry::new_with_target("user", "downloader", &user).unwrap();
-    let new_enc = ENCRYPTER.get_or_init(Encrypter::new);
-    entry
-        .set_password(&serde_json::to_string(new_enc).unwrap())
-        .unwrap();
-    entry
 }
 
 #[cfg(test)]
@@ -97,8 +74,8 @@ mod test {
 
     #[test]
     fn encrtpter_create_test() {
-        let e1 = Encrypter::from_key_ring();
-        let e2 = Encrypter::from_key_ring();
+        let e1 = Encrypter::from_key_ring().unwrap();
+        let e2 = Encrypter::from_key_ring().unwrap();
         assert_eq!(e1, e2);
         let data = HashMap::from([("hello", "world")]);
         let enc_ret1 = e1.encrypt(&data).unwrap();

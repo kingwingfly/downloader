@@ -90,9 +90,9 @@ impl TempDirHandler {
         let _statu = cmd.status();
     }
 
-    pub fn move_<P1>(&self, filename: P1) -> std::io::Result<()>
+    pub fn move_<P>(&self, filename: P) -> std::io::Result<()>
     where
-        P1: AsRef<Path>,
+        P: AsRef<Path>,
     {
         let from = self.temp_dir.path().join(filename.as_ref());
         let to = self.o_p.parent().unwrap().join(filename.as_ref());
@@ -135,8 +135,8 @@ mod test {
     #[ignore = "don't handle txt"]
     fn move_test() {
         let temp_file_handler = TempDirHandler::new("test").unwrap();
-        assert!(temp_file_handler.write(".txt", b"Hello, world").is_ok());
-        assert!(temp_file_handler.move_(".txt").is_ok());
+        assert!(temp_file_handler.write("txt", b"Hello, world").is_ok());
+        assert!(temp_file_handler.move_("txt").is_ok());
         assert!(std::fs::remove_file("/Users/louis/test.txt").is_ok());
     }
 }

@@ -4,6 +4,7 @@
 use model::TaskBmc;
 use std::{
     cell::RefCell,
+    collections::HashMap,
     sync::{Mutex, OnceLock},
 };
 
@@ -44,6 +45,17 @@ macro_rules! gen_tauri_task_handler {
 gen_tauri_task_handler![cancel, pause, continue_, remove];
 
 #[tauri::command]
+fn show_config() -> HashMap<String, String> {
+    crate::config::show_config().unwrap_or(HashMap::new())
+}
+
+#[tauri::command]
+fn upgrade_config(json: HashMap<String, String>) {
+    dbg!(&json);
+    crate::config::upgrade_config(json).ok();
+}
+
+#[tauri::command]
 fn progress() -> Vec<(String, usize, usize, String, String)> {
     let task_bmc = TASK_BMC.get().unwrap().lock().unwrap();
     let ret = task_bmc.borrow().progress().unwrap();
@@ -55,7 +67,15 @@ fn main() {
     TASK_BMC.get_or_init(|| Mutex::new(RefCell::new(TaskBmc::new())));
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![
-            echo, create, cancel, pause, continue_, remove, progress
+            echo,
+            create,
+            cancel,
+            pause,
+            continue_,
+            remove,
+            progress,
+            show_config,
+            upgrade_config
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

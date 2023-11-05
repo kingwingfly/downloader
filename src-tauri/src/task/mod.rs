@@ -10,7 +10,6 @@ use crate::utils::TempDirHandler;
 
 use actix::{Actor, Addr};
 use error::{task_error, TaskResult};
-use parser::Info;
 use scraper::Html;
 use snafu::OptionExt;
 use std::sync::Arc;
@@ -23,6 +22,8 @@ use uuid::Uuid;
 
 #[cfg(test)]
 use tracing::{instrument, Level};
+
+use self::parser::Info;
 
 #[derive(Debug)]
 #[cfg_attr(test, derive(PartialEq))]
@@ -55,8 +56,7 @@ impl Task {
 
     pub async fn go(&self) -> TaskResult<()> {
         let (filename, infos) = self.get_child_tasks().await?;
-        self.save(filename, infos.into_iter().map(|i| i.url).collect())
-            .await?;
+        self.save(filename, infos).await?;
         Ok(())
     }
 
@@ -64,17 +64,17 @@ impl Task {
     /// `urls[0]` is the video urls
     /// `urls[1]` is the audio url
     /// Due to using pop to gain the url, so `&mut` needed
-    #[cfg_attr(test, instrument(level=Level::DEBUG, skip(self, urls), fields(filename=filename.as_ref(), uuid=format!("<{:.5}...>", self.id.to_string())), err))]
-    async fn save<S: AsRef<str>>(&self, filename: S, urls: Vec<Url>) -> TaskResult<()> {
+    #[cfg_attr(test, instrument(level=Level::DEBUG, skip(self, infos), fields(filename=filename.as_ref(), uuid=format!("<{:.5}...>", self.id.to_string())), err))]
+    async fn save<S: AsRef<str>, I: Info>(&self, filename: S, infos: Vec<I>) -> TaskResult<()> {
         let temp_dir = Arc::new(TempDirHandler::new(filename.as_ref()).unwrap());
         self.addr
             .send(SetFilename(filename.as_ref().to_string()))
             .await??;
         let referer = self.get_referer()?;
         let mut rxs = vec![];
-        for (i, url) in urls.into_iter().enumerate() {
+        for info in infos.into_iter() {
             let (tx, rx) = tokio::sync::oneshot::channel();
-            let run_task = RunTask::new(format!("{i}.mp4"), url, &referer, temp_dir.clone(), tx);
+            let run_task = RunTask::new(info.suffix(), info.url(), &referer, temp_dir.clone(), tx);
             self.addr.send(run_task).await??;
             rxs.push(rx);
         }
@@ -110,7 +110,7 @@ impl Task {
     }
 
     #[cfg_attr(test, instrument(level=Level::DEBUG, skip(self), fields(uuid=format!("<{:.5}...>", self.id.to_string())), err))]
-    async fn get_child_tasks(&self) -> TaskResult<(String, Vec<Info>)> {
+    async fn get_child_tasks(&self) -> TaskResult<(String, Vec<impl Info>)> {
         match self.get_task_type() {
             TaskType::BiliBili => {
                 let html = self.get_html().await?;
