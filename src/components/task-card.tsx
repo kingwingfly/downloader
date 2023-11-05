@@ -1,7 +1,7 @@
 'use client'
 
-import BtnInvoke from "./btnInvoke"
-import ProgressBar from "./progress"
+import BtnInvoke from "./btn-invoke"
+import ProgressBar from "./progress-c"
 
 // title finished total uuid state
 export type CardInfo = [string, number, number, string, string]

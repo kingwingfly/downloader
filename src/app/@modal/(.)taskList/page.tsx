@@ -1,5 +1,5 @@
-import Modal from "@/components/modal";
-import TaskList from "@/components/taskList";
+import Modal from "@/components/modal-c";
+import TaskList from "@/components/task-list";
 
 export default function taskListModal() {
     return (

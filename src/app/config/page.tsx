@@ -1,5 +1,5 @@
-import ConfigForm from "@/components/configForm";
-import HomeBtn from "@/components/homeBtn";
+import ConfigForm from "@/components/config-form";
+import HomeBtn from "@/components/home-btn";
 
 export default function ConfigPage() {
     return (

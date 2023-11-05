@@ -1,5 +1,5 @@
-import BtnLink from "@/components/btnLink";
-import ConfigIcon from "@/components/configIcon";
+import BtnLink from "@/components/btn-link";
+import ConfigIcon from "@/components/config-icon";
 
 export default function Home() {
   return (

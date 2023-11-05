@@ -1,5 +1,5 @@
-import ConfigForm from "@/components/configForm";
-import Modal from "@/components/modal";
+import ConfigForm from "@/components/config-form";
+import Modal from "@/components/modal-c";
 
 export default function configModal() {
     return (

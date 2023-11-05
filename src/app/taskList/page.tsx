@@ -1,5 +1,5 @@
-import HomeBtn from "@/components/homeBtn"
-import TaskList from "@/components/taskList";
+import HomeBtn from "@/components/home-btn"
+import TaskList from "@/components/task-list";
 
 export default function TaskListPage() {
     return (

@@ -1,6 +1,6 @@
 'use client'
 import { FormEvent } from "react";
-import Input from "./input";
+import Input from "./input-c";
 import { invoke } from "@tauri-apps/api/tauri";
 import { useRouter } from "next/navigation";
 

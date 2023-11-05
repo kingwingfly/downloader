@@ -165,13 +165,7 @@ macro_rules! task_func {
 }
 
 impl Task {
-    task_func![
-        (cancel, Cancel),
-        (pause, Pause),
-        (continue_, Continue_),
-        (revive, Revive),
-        (restart, Restart)
-    ];
+    task_func![(cancel, Cancel), (pause, Pause), (continue_, Continue_)];
 }
 
 // endregion Task

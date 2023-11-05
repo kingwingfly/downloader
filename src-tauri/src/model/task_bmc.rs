@@ -105,7 +105,7 @@ impl TaskBmc {
         Ok(ret)
     }
 
-    bmc_func![cancel, pause, continue_, revive, restart];
+    bmc_func![cancel, pause, continue_];
 }
 
 impl Drop for TaskBmc {

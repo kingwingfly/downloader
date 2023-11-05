@@ -1,6 +1,6 @@
 'use client'
 
-import TaskCard, { CardInfo } from "@/components/taskCard";
+import TaskCard, { CardInfo } from "@/components/task-card";
 import { invoke } from "@tauri-apps/api/tauri";
 import { useEffect, useState } from "react";
 

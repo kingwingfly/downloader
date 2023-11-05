@@ -2,7 +2,7 @@
 
 import { invoke } from "@tauri-apps/api/tauri";
 import { FormEvent, useEffect, useState } from "react"
-import Input from "./input"
+import Input from "./input-c"
 
 interface ConfigForm { [key: string]: string }
 
