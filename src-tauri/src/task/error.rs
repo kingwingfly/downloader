@@ -4,11 +4,8 @@ use snafu::prelude::*;
 #[derive(Debug, Snafu)]
 #[snafu(module, visibility(pub(crate)), context(suffix(Error)))]
 pub enum TaskError {
-    #[snafu(display("Could not parse url: {url}"))]
-    ParseUrl {
-        source: url::ParseError,
-        url: String,
-    },
+    #[snafu(display("Could not parse url"), context(false))]
+    ParseUrl { source: url::ParseError },
     #[snafu(display("Maybe network disconnected"), context(false))]
     GetError { source: ReqwestError },
     #[snafu(context(false))]
@@ -18,7 +15,7 @@ pub enum TaskError {
     #[snafu(context(suffix(false)))]
     UnknownTaskType,
     #[snafu(context(suffix(false)))]
-    ConfigNotFound,
+    ConfigNotFound {},
     #[snafu(context(false))]
     SaveError { source: ActorError },
     #[snafu(context(false))]
@@ -49,6 +46,8 @@ pub enum ActorError {
     ContentLengthUnknown,
     #[snafu()]
     NetWorkError { source: reqwest::Error },
+    #[snafu(context(suffix(false)))]
+    Cancelled,
 }
 
 pub type ActorResult<T> = Result<T, ActorError>;

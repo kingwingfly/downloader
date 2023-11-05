@@ -1,16 +1,18 @@
 'use client'
 import { FormEvent } from "react";
-import Input from "./input";
-import { invoke } from "@tauri-apps/api";
-import { echo } from "@/utils/echo";
+import Input from "./input-c";
+import { invoke } from "@tauri-apps/api/tauri";
+import { useRouter } from "next/navigation";
 
 export default function NewTaskBar() {
+    const router = useRouter()
     const onsubmit = async (e: FormEvent<HTMLFormElement>) => {
         e.preventDefault()
         let form = new FormData(e.currentTarget)
         let url = form.get('url')?.toString()
-        let ret = window.__TAURI__ ? await invoke("create", { url }) : echo(url)
+        let ret = await invoke("create", { url })
         console.log(ret)
+        router.push("/taskList")
     }
     return (
         <>

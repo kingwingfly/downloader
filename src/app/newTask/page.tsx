@@ -1,5 +1,5 @@
-import HomeBtn from "@/components/homeBtn";
-import NewTaskBar from "@/components/newTaskBar";
+import HomeBtn from "@/components/home-btn";
+import NewTaskBar from "@/components/new-task-bar";
 
 export default function newTask() {
     return (

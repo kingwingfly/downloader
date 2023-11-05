@@ -1,5 +1,5 @@
-import Modal from "@/components/modal";
-import NewTaskBar from "@/components/newTaskBar";
+import Modal from "@/components/modal-c";
+import NewTaskBar from "@/components/new-task-bar";
 
 export default function newTaskModal() {
     return (
