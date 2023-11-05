@@ -23,6 +23,7 @@ pub fn config_init() -> ConfigResult<()> {
                     .context(config_error::ConfigDirUnknown)?
                     .to_str(),
             )?
+            .set_default("ffmpeg", "ffmpeg")?
             .set_default("bili_cookie", "")?
             .add_source(KeySource::new()?)
             .build()?;
@@ -119,7 +120,6 @@ impl KeySource {
             .join("downloader");
         std::fs::create_dir_all(&config_dir).unwrap();
         let encrypter = encrypt::Encrypter::from_key_ring()?;
-        dbg!(&self.inner);
         for (filename, data) in self.inner.iter() {
             if data.to_string().len() == 0 {
                 std::fs::remove_file(config_dir.join(filename)).unwrap();
