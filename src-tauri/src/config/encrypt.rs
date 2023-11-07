@@ -5,8 +5,6 @@ use rsa::{Pkcs1v15Encrypt, RsaPrivateKey, RsaPublicKey};
 #[cfg_attr(test, derive(Debug, PartialEq))]
 pub struct Encrypter {
     priv_key: RsaPrivateKey,
-    #[cfg(not(target_os = "windows"))]
-    pub_key: RsaPublicKey,
 }
 
 impl Encrypter {
@@ -15,16 +13,12 @@ impl Encrypter {
         let bits = if cfg!(not(target_os = "windows")) {
             2048
         } else {
-            1200
+            1024 // too long isn't accepted by Win
         };
         let priv_key = RsaPrivateKey::new(&mut rng, bits).expect("failed to generate a key");
         #[cfg(not(target_os = "windows"))]
         let pub_key = RsaPublicKey::from(&priv_key);
-        Self {
-            priv_key,
-            #[cfg(not(target_os = "windows"))]
-            pub_key,
-        }
+        Self { priv_key }
     }
 
     pub fn from_key_ring() -> ConfigResult<Self> {
@@ -45,11 +39,16 @@ impl Encrypter {
     {
         let mut rng = rand::thread_rng();
         let origin = serde_json::to_vec(origin).unwrap();
-        #[cfg(not(target_os = "windows"))]
-        let encrypted = self.pub_key.encrypt(&mut rng, Pkcs1v15Encrypt, &origin)?;
-        #[cfg(target_os = "windows")]
-        let encrypted =
-            RsaPublicKey::from(&self.priv_key).encrypt(&mut rng, Pkcs1v15Encrypt, &origin)?;
+        let chunk_size = if cfg!(not(target_os = "windows")) {
+            245 // (2048 >> 3) - 11
+        } else {
+            117 // (1024 >> 3) - 11
+        };
+        let pub_key = RsaPublicKey::from(&self.priv_key);
+        let mut encrypted = vec![];
+        for c in origin.chunks(chunk_size) {
+            encrypted.extend(pub_key.encrypt(&mut rng, Pkcs1v15Encrypt, c)?);
+        }
         Ok(encrypted)
     }
 
@@ -57,7 +56,15 @@ impl Encrypter {
     where
         for<'de> R: serde::Deserialize<'de>,
     {
-        let decrypted = self.priv_key.decrypt(Pkcs1v15Encrypt, &encrypted)?;
+        let mut decrypted = vec![];
+        let chunk_size = if cfg!(not(target_os = "windows")) {
+            256
+        } else {
+            128
+        };
+        for c in encrypted.chunks(chunk_size) {
+            decrypted.extend(self.priv_key.decrypt(Pkcs1v15Encrypt, c)?);
+        }
         let origin = serde_json::from_slice(&decrypted)?;
         Ok(origin)
     }
@@ -70,6 +77,7 @@ fn keyring_entry() -> keyring::Entry {
 
 #[cfg(test)]
 mod test {
+    use rand::distributions::{Alphanumeric, DistString};
     use std::collections::{HashMap, HashSet};
 
     use super::*;
@@ -91,7 +99,10 @@ mod test {
         let e1 = Encrypter::from_key_ring().unwrap();
         let e2 = Encrypter::from_key_ring().unwrap();
         assert_eq!(e1, e2);
-        let data = HashMap::from([("hello", "world")]);
+        let data = HashMap::from([(
+            Alphanumeric.sample_string(&mut rand::thread_rng(), 1024),
+            Alphanumeric.sample_string(&mut rand::thread_rng(), 1024),
+        )]);
         let enc_ret1 = e1.encrypt(&data).unwrap();
         let enc_ret2 = e2.encrypt(&data).unwrap();
         assert_ne!(enc_ret1, enc_ret2);

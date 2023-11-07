@@ -98,7 +98,10 @@ impl KeySource {
                         data,
                     );
                 }
-                Err(_) => {}
+                Err(_) => {
+                    // can not decrypt, so delete the file
+                    std::fs::remove_file(&path).unwrap();
+                }
             }
         }
         Ok(ret.into())
@@ -122,7 +125,7 @@ impl KeySource {
         let encrypter = encrypt::Encrypter::from_key_ring()?;
         for (filename, data) in self.inner.iter() {
             if data.to_string().len() == 0 {
-                std::fs::remove_file(config_dir.join(filename)).unwrap();
+                std::fs::remove_file(config_dir.join(filename)).ok();
                 continue;
             }
             let encrypted = encrypter.encrypt(&data.to_string()).unwrap();
