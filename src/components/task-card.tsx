@@ -1,7 +1,7 @@
 'use client'
 
 import BtnInvoke from "./btn-invoke"
-import ProgressBar from "./progress-c"
+import ProgressBar from "./progress"
 
 // title finished total uuid state
 export type CardInfo = [string, number, number, string, string]
@@ -18,8 +18,13 @@ export default function TaskCard({ info }: { info: CardInfo }) {
             <div className="text-gray-700">{`${finished}/${total} Mb`}</div>
             <ProgressBar progress={progress} state={info[4]} />
             <div className="btns pt-4 flex justify-center">
-                <BtnInvoke func={"pause"} params={{ id: info[3] }} desc="Pause" />
-                <BtnInvoke func={"continue_"} params={{ id: info[3] }} desc="Continue" />
+                {
+                    info[4] == "pausing" ? <BtnInvoke func={""} desc="Pausing" disabled={true} /> :
+                        info[4] == "paused" ?
+                            <BtnInvoke func={"continue_"} params={{ id: info[3] }} desc="Continue" />
+                            :
+                            <BtnInvoke func={"pause"} params={{ id: info[3] }} desc="Pause" />
+                }
                 <BtnInvoke func={"cancel"} params={{ id: info[3] }} desc="Cancel" />
                 <BtnInvoke func={"remove"} params={{ id: info[3] }} desc="Remove" />
             </div>

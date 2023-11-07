@@ -14,7 +14,7 @@ export default function TaskList() {
             await new Promise(resolve => setTimeout(resolve, infos.sleep))
             let new_infos = await invoke("progress") as CardInfo[]
             if (!ignore) {
-                console.log(new_infos)
+                // console.log(new_infos)
                 setInfos({ infos: new_infos, sleep: 1000 })
             }
         }

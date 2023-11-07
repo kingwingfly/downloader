@@ -2,19 +2,63 @@ use super::error::{actor_error, ActorResult};
 use crate::utils::TempDirHandler;
 
 use actix::prelude::*;
+use num_enum::{FromPrimitive, IntoPrimitive};
 use reqwest::Client;
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicU8, AtomicUsize, Ordering};
 use std::sync::Arc;
 use tokio::sync::oneshot;
-use tracing::debug;
 use tracing::{instrument, Level};
 use url::Url;
 
+#[derive(Eq, PartialEq, FromPrimitive, IntoPrimitive)]
+#[repr(u8)]
+enum Instrument {
+    #[num_enum(default)]
+    Continue = 0,
+    TryPause,
+    Paused,
+    Cancel,
+    Finish,
+}
+
+#[derive(Eq, PartialEq, FromPrimitive, IntoPrimitive)]
+#[cfg_attr(test, derive(Debug))]
+#[repr(u8)]
+enum State {
+    #[num_enum(default)]
+    Downloading = 0,
+    Pausing,
+    Paused,
+    Cancelled,
+    Finished,
+}
+
+#[derive(Default)]
+struct TaskState {
+    state: AtomicU8,
+}
+
+impl TaskState {
+    fn new() -> Self {
+        Self {
+            ..Default::default()
+        }
+    }
+
+    fn now(&self) -> State {
+        self.state.load(Ordering::Relaxed).into()
+    }
+
+    fn trans(&self, instrument: Instrument) {
+        match instrument {
+            x => self.state.store(x.into(), Ordering::Relaxed),
+        }
+    }
+}
+
 // region TaskActor
-#[derive(Debug)]
 pub struct TaskActor {
-    paused: Arc<AtomicBool>,
-    cancel: Arc<AtomicBool>,
+    state: Arc<TaskState>,
     total: Arc<AtomicUsize>,
     finished: Arc<AtomicUsize>,
     filename: Option<String>,
@@ -23,8 +67,7 @@ pub struct TaskActor {
 impl TaskActor {
     pub fn new() -> Self {
         Self {
-            paused: Arc::new(AtomicBool::new(false)),
-            cancel: Arc::new(AtomicBool::new(false)),
+            state: Arc::new(TaskState::new()),
             total: Arc::new(AtomicUsize::new(0)),
             finished: Arc::new(AtomicUsize::new(0)),
             filename: None,
@@ -80,8 +123,7 @@ impl Handler<RunTask> for TaskActor {
     fn handle(&mut self, msg: RunTask, _ctx: &mut Self::Context) -> Self::Result {
         let actor_total = self.total.clone();
         let actor_finished = self.finished.clone();
-        let pause = self.paused.clone();
-        let cancel = self.cancel.clone();
+        let state = self.state.clone();
         actix_rt::spawn(async move {
             let client = Arc::new(
                 reqwest::Client::builder()
@@ -95,10 +137,10 @@ impl Handler<RunTask> for TaskActor {
             actor_total.fetch_add(total, Ordering::Relaxed);
             let mut finished = 0;
             while finished < total {
-                if !pause.load(Ordering::Relaxed) {
-                    if cancel.load(Ordering::Relaxed) {
-                        break;
-                    }
+                let state_now = state.now();
+                if state_now == State::Cancelled {
+                    break;
+                } else if state_now == State::Downloading {
                     let mut resp = client
                         .get(msg.url.clone())
                         .header("Referer", &msg.referer)
@@ -119,12 +161,14 @@ impl Handler<RunTask> for TaskActor {
                     }
                     finished += (1 << 23) + 1;
                 } else {
+                    state.trans(Instrument::Paused);
                     tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
                 }
             }
-            if cancel.load(Ordering::Relaxed) {
+            if state.now() == State::Cancelled {
                 msg.tx.send(actor_error::Cancelled.fail()).unwrap();
             } else {
+                state.trans(Instrument::Finish);
                 msg.tx.send(Ok(())).unwrap();
             }
         });
@@ -142,8 +186,7 @@ impl Handler<Pause> for TaskActor {
     type Result = ActorResult<()>;
 
     fn handle(&mut self, _msg: Pause, _ctx: &mut Self::Context) -> Self::Result {
-        debug!("pause");
-        self.paused.store(true, Ordering::Relaxed);
+        self.state.trans(Instrument::TryPause);
         Ok(())
     }
 }
@@ -160,8 +203,7 @@ impl Handler<Continue_> for TaskActor {
     type Result = ActorResult<()>;
 
     fn handle(&mut self, _msg: Continue_, _ctx: &mut Self::Context) -> Self::Result {
-        debug!("continue");
-        self.paused.store(false, Ordering::Relaxed);
+        self.state.trans(Instrument::Continue);
         Ok(())
     }
 }
@@ -178,8 +220,7 @@ impl Handler<Cancel> for TaskActor {
     type Result = ActorResult<()>;
 
     fn handle(&mut self, _msg: Cancel, _ctx: &mut Self::Context) -> Self::Result {
-        debug!("cancel");
-        self.cancel.store(true, Ordering::Relaxed);
+        self.state.trans(Instrument::Cancel);
         Ok(())
     }
 }
@@ -237,14 +278,12 @@ impl Handler<ProgressQuery> for TaskActor {
     fn handle(&mut self, msg: ProgressQuery, _ctx: &mut Self::Context) -> Self::Result {
         let finished = self.finished.load(Ordering::Relaxed);
         let total = self.total.load(Ordering::Relaxed);
-        let state = if self.paused.load(Ordering::Relaxed) {
-            "paused"
-        } else if self.cancel.load(Ordering::Relaxed) {
-            "cancelled"
-        } else if total == finished && total != 0 {
-            "finished"
-        } else {
-            "downloading"
+        let state = match self.state.now() {
+            State::Downloading => "downloading",
+            State::Pausing => "pausing",
+            State::Paused => "paused",
+            State::Cancelled => "cancelled",
+            State::Finished => "finished",
         };
         msg.tx
             .send(Ok((
@@ -324,5 +363,17 @@ mod tests {
         assert!(addr.send(run_task).await.is_ok());
         assert!(rx.await.is_ok());
         tokio::time::sleep(tokio::time::Duration::from_secs(15)).await;
+    }
+
+    #[test]
+    fn state_test() {
+        let state = TaskState::new();
+        assert_eq!(state.now(), State::Downloading);
+        state.trans(Instrument::TryPause);
+        assert_eq!(state.now(), State::Pausing);
+        state.trans(Instrument::Paused);
+        assert_eq!(state.now(), State::Paused);
+        state.trans(Instrument::Finish);
+        assert_eq!(state.now(), State::Finished);
     }
 }

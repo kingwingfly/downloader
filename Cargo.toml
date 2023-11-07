@@ -1,18 +1,17 @@
 [workspace]
-members = ["src-tauri"]
+members = [ "src-tauri",]
 resolver = "2"
 
 [workspace.package]
 name = "downloader"
-version = "0.2.0"
+version = "0.3.0"
 description = ""
-authors = ["Louis <836250617@qq.com>"]
+authors = [ "Louis <836250617@qq.com>",]
 license = ""
 repository = ""
 default-run = "app"
 edition = "2021"
 rust-version = "1.70"
-
 
 [profile.release]
 lto = true
