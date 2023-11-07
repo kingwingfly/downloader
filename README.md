@@ -163,6 +163,7 @@ See the process
 
 - [x] Fix: tauri build goes wrong with nextjs' parellel intercepting route
 - [ ] New: more website support
+- [ ] New: remote download
 
 See the [open issues](https://github.com/kingwingfly/downloader/issues) for a full list of proposed features (and known issues).
 
@@ -251,5 +252,3 @@ Project Link: [https://github.com/kingwingfly/downloader](https://github.com/kin
 [Next-url]: https://nextjs.org/
 [React.js]: https://img.shields.io/badge/React-20232A?style=for-the-badge&logo=react&logoColor=61DAFB
 [React-url]: https://reactjs.org/
-[Vue.js]: https://img.shields.io/badge/Vue.js-35495E?style=for-the-badge&logo=vuedotjs&logoColor=4FC08D
-[Vue-url]: https://vuejs.org/

@@ -36,10 +36,11 @@ impl TempDirHandler {
         let filename = sanitize_filename::sanitize(filename);
         let temp_dir = TempDir::new("downloader")?;
         let o_p = if cfg!(test) {
-            temp_dir.path().join("merge_test.mp4")
+            temp_dir.path().to_path_buf()
         } else {
-            Path::new(&get_config("save_dir").unwrap()).join(format!("{}.mp4", filename))
+            Path::new(&get_config("save_dir").unwrap()).to_path_buf()
         };
+        std::fs::create_dir_all(&o_p).unwrap();
         Ok(Self {
             temp_dir,
             filename,
@@ -80,13 +81,18 @@ impl TempDirHandler {
                 None => {}
             }
         }
+        let o_p = if cfg!(test) {
+            self.o_p.join("merge_test.mp4")
+        } else {
+            self.o_p.join(format!("{}.mp4", self.filename))
+        };
         cmd.args([
             "-y",
             "-c:v",
             "copy",
             "-c:a",
             "copy",
-            self.o_p.to_string_lossy().as_ref(),
+            o_p.to_string_lossy().as_ref(),
         ]);
         let _statu = cmd.status();
     }

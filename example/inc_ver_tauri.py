@@ -8,6 +8,7 @@ version = "0.3.0"
 def main():
     this_path = os.path.dirname(__file__)
     root = os.path.dirname(this_path)
+
     with open(
         os.path.join(root, "src-tauri", "tauri.conf.json"), "r+", encoding="utf-8"
     ) as f:
@@ -23,6 +24,13 @@ def main():
         f.seek(0)
         f.truncate()
         toml.dump(cargo_toml, f)
+
+    with open(os.path.join(root, "package.json"), "r+", encoding="utf-8") as f:
+        conf_json = json.load(f)
+        conf_json["version"] = version
+        f.seek(0)
+        f.truncate()
+        json.dump(conf_json, f, indent=2)
 
 
 if __name__ == "__main__":

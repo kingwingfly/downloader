@@ -21,8 +21,7 @@ enum Instrument {
     Finish,
 }
 
-#[derive(Eq, PartialEq, FromPrimitive, IntoPrimitive)]
-#[cfg_attr(test, derive(Debug))]
+#[derive(Debug, Eq, PartialEq, FromPrimitive, IntoPrimitive)]
 #[repr(u8)]
 enum State {
     #[num_enum(default)]
@@ -135,40 +134,43 @@ impl Handler<RunTask> for TaskActor {
                 .await
                 .unwrap_or(0);
             actor_total.fetch_add(total, Ordering::Relaxed);
-            let mut finished = 0;
+            let mut finished: usize = 0;
             while finished < total {
-                let state_now = state.now();
-                if state_now == State::Cancelled {
-                    break;
-                } else if state_now == State::Downloading {
-                    let mut resp = client
-                        .get(msg.url.clone())
-                        .header("Referer", &msg.referer)
-                        .header(
-                            "Range",
-                            format!(
-                                "bytes={}-{}",
-                                finished,
-                                (total - 1).min(finished + (1 << 23))
-                            ),
-                        )
-                        .send()
-                        .await
-                        .unwrap();
-                    while let Some(c) = resp.chunk().await.unwrap() {
-                        msg.temp_dir.write(&msg.suffix, &c).unwrap();
-                        actor_finished.fetch_add(c.len(), Ordering::Relaxed);
+                match state.now() {
+                    State::Downloading => {
+                        let mut resp = client
+                            .get(msg.url.clone())
+                            .header("Referer", &msg.referer)
+                            .header(
+                                "Range",
+                                format!(
+                                    "bytes={}-{}",
+                                    finished,
+                                    (total - 1).min(finished + (1 << 23))
+                                ),
+                            )
+                            .send()
+                            .await
+                            .unwrap();
+                        while let Some(c) = resp.chunk().await.unwrap() {
+                            msg.temp_dir.write(&msg.suffix, &c).unwrap();
+                            actor_finished.fetch_add(c.len(), Ordering::Relaxed);
+                        }
+                        finished += (1 << 23) + 1;
                     }
-                    finished += (1 << 23) + 1;
-                } else {
-                    state.trans(Instrument::Paused);
-                    tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+                    State::Cancelled => break,
+                    _ => {
+                        state.trans(Instrument::Paused);
+                        tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+                    }
                 }
             }
             if state.now() == State::Cancelled {
                 msg.tx.send(actor_error::Cancelled.fail()).unwrap();
             } else {
-                state.trans(Instrument::Finish);
+                if actor_finished.load(Ordering::Relaxed) >= actor_total.load(Ordering::Relaxed) {
+                    state.trans(Instrument::Finish);
+                }
                 msg.tx.send(Ok(())).unwrap();
             }
         });
