@@ -16,8 +16,6 @@ impl Encrypter {
             1024 // too long isn't accepted by Win
         };
         let priv_key = RsaPrivateKey::new(&mut rng, bits).expect("failed to generate a key");
-        #[cfg(not(target_os = "windows"))]
-        let pub_key = RsaPublicKey::from(&priv_key);
         Self { priv_key }
     }
 
