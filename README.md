@@ -102,10 +102,12 @@ This app uses ffmpeg to merge the video and audio, so you should add ffmpeg to e
 
 dev
 ```
+npm i
 cargo tauri dev
 ```
 build yourself
 ```
+npm i
 cargo tauri build
 ```
 
@@ -121,6 +123,7 @@ cargo tauri build
 1. Clone the repo
     ```sh
     git clone https://github.com/kingwingfly/downloader.git
+    cd downloader
     ```
 2. Install NPM packages
     ```sh
@@ -158,7 +161,7 @@ See the process
 <!-- ROADMAP -->
 ## Roadmap
 
-- [ ] Fix: tauri build goes wrong with nextjs' parellel route
+- [x] Fix: tauri build goes wrong with nextjs' parellel intercepting route
 - [ ] New: more website support
 
 See the [open issues](https://github.com/kingwingfly/downloader/issues) for a full list of proposed features (and known issues).
