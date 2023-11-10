@@ -23,19 +23,19 @@ impl JsonParser {
     }
 
     #[allow(unused)]
-    pub fn get_info<T>(&self, pointer: &str) -> ParseResult<Box<dyn Info>>
+    pub fn get_info<T>(&self, pointer: &str) -> ParseResult<T>
     where
         for<'de> T: serde::Deserialize<'de> + Info + 'static,
     {
-        Ok(Box::new(serde_json::from_value::<T>(
+        Ok(serde_json::from_value::<T>(
             self.json
                 .pointer(pointer)
                 .context(parse_error::InfoNotFound)?
                 .clone(),
-        )?) as Box<dyn Info>)
+        )?)
     }
 
-    pub fn get_info_array<T>(&self, pointer: &str) -> ParseResult<Vec<Box<dyn Info>>>
+    pub fn get_info_array<T>(&self, pointer: &str) -> ParseResult<Vec<T>>
     where
         for<'de> T: serde::Deserialize<'de> + Info + 'static,
     {
@@ -48,7 +48,6 @@ impl JsonParser {
             .iter()
             .rev()
             .filter_map(|v| serde_json::from_value::<T>(v.clone()).ok())
-            .map(|i| Box::new(i) as Box<dyn Info>)
             .collect())
     }
 }

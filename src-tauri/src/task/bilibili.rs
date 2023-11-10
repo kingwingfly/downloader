@@ -5,12 +5,7 @@ use uuid::Uuid;
 
 use crate::{config::get_config, task::parser::JsonParser};
 
-use super::{
-    error::TaskResult,
-    info::{BiliInfo, Info},
-    task_actor::TaskActor,
-    task_error, TaskExe,
-};
+use super::{error::TaskResult, info::BiliInfo, task_actor::TaskActor, task_error, TaskExe};
 
 pub struct BiliTask {
     id: Uuid,
@@ -32,7 +27,9 @@ impl BiliTask {
 }
 
 impl TaskExe for BiliTask {
-    async fn get_child_tasks(&self) -> TaskResult<(String, Vec<Box<dyn Info>>)> {
+    type Info = BiliInfo;
+
+    async fn get_child_tasks(&self) -> TaskResult<(String, Vec<Self::Info>)> {
         let client = reqwest::Client::new();
 
         let bvid = self
