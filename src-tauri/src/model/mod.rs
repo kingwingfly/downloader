@@ -3,11 +3,11 @@ mod task_bmc; // Task Backend Model Controller for task
 
 use std::sync::Arc;
 
-use crate::task::TaskExe;
+use crate::task::{Info, TaskExe};
 
 pub use task_bmc::TaskBmc;
 
-type Task = Arc<dyn TaskExe + Send + Sync>;
+pub type Task = Arc<impl TaskExe<Info = impl Info> + Send + Sync>;
 
 pub struct Model {
     pub tasks: Vec<Task>,

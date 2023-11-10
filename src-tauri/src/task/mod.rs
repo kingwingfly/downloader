@@ -38,30 +38,24 @@ macro_rules! task_func {
 }
 
 pub trait TaskExe {
+    type Info: Info;
+
     // Return (filename, infos)
     // filename: the filename of the video
     // infos: the video and audio infos which impl the Info trait
-    async fn get_child_tasks(&self) -> TaskResult<(String, Vec<Box<dyn Info>>)>
-    where
-        Self: Sized;
+    async fn get_child_tasks(&self) -> TaskResult<(String, Vec<Self::Info>)>;
 
     fn addr(&self) -> &Addr<TaskActor>;
     fn url(&self) -> &Url;
     fn id(&self) -> &Uuid;
 
-    async fn go(&self) -> TaskResult<()>
-    where
-        Self: Sized,
-    {
+    async fn go(&self) -> TaskResult<()> {
         let (filename, infos) = self.get_child_tasks().await?;
         self.save(filename, infos).await?;
         Ok(())
     }
 
-    async fn save(&self, filename: impl AsRef<str>, infos: Vec<Box<dyn Info>>) -> TaskResult<()>
-    where
-        Self: Sized,
-    {
+    async fn save(&self, filename: impl AsRef<str>, infos: Vec<Self::Info>) -> TaskResult<()> {
         let temp_dir = Arc::new(TempDirHandler::new(filename.as_ref()).unwrap());
         self.addr()
             .send(SetFilename(filename.as_ref().to_string()))
@@ -115,7 +109,7 @@ pub trait TaskExe {
     task_func![(cancel, Cancel), (pause, Pause), (continue_, Continue_)];
 }
 
-pub fn new_task<S: AsRef<str>>(url: S) -> TaskResult<impl TaskExe> {
+pub fn new_task<S: AsRef<str>>(url: S) -> TaskResult<impl TaskExe<Info = impl Info>> {
     let url = url.as_ref().parse::<Url>()?;
     match url.host_str() {
         Some("bilibili.com") | Some("www.bilibili.com") => bilibili::BiliTask::new(url),
