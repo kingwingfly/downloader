@@ -34,12 +34,16 @@ impl BiliTask {
 impl TaskExe for BiliTask {
     async fn get_child_tasks(&self) -> TaskResult<(String, Vec<Box<dyn Info>>)> {
         let client = reqwest::Client::new();
+
+        let bvid = self
+            .url()
+            .path_segments()
+            .context(task_error::BvidNotFound)?
+            .nth(1)
+            .context(task_error::BvidNotFound)?;
+
         let api = "https://api.bilibili.com/x/web-interface/view";
-        let resp = client
-            .get(api)
-            .query(&[("bvid", "BV1EC4y1V7ho")])
-            .send()
-            .await?;
+        let resp = client.get(api).query(&[("bvid", bvid)]).send().await?;
 
         let json = resp.json::<serde_json::Value>().await?;
         #[cfg(test)]
@@ -57,7 +61,7 @@ impl TaskExe for BiliTask {
         let resp = client
             .get(api)
             .query(&[
-                ("bvid", "BV1EC4y1V7ho"),
+                ("bvid", bvid),
                 ("cid", &cid),
                 ("qn", "127"),
                 ("fourk", "1"),
