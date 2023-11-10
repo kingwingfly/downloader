@@ -49,9 +49,7 @@ impl TaskState {
     }
 
     fn trans(&self, instrument: Instrument) {
-        match instrument {
-            x => self.state.store(x.into(), Ordering::Relaxed),
-        }
+        self.state.store(instrument.into(), Ordering::Relaxed);
     }
 }
 

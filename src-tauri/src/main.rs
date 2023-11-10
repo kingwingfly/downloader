@@ -46,7 +46,7 @@ gen_tauri_task_handler![cancel, pause, continue_, remove];
 
 #[tauri::command]
 fn show_config() -> HashMap<String, String> {
-    crate::config::show_config().unwrap_or(HashMap::new())
+    crate::config::show_config().unwrap_or_default()
 }
 
 #[tauri::command]

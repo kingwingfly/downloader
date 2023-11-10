@@ -69,16 +69,15 @@ impl TempDirHandler {
             std::process::Command::new(get_config("ffmpeg").unwrap_or("ffmpeg".to_string()));
         for path in std::fs::read_dir(self.temp_dir.path()).unwrap() {
             let path = path.unwrap();
-            match new_mime_guess::from_path(path.path()).first() {
-                Some(mime) => match mime.type_() {
+            if let Some(mime) = new_mime_guess::from_path(path.path()).first() {
+                match mime.type_() {
                     mime::VIDEO | mime::AUDIO => {
                         cmd.args(["-i", path.path().to_string_lossy().as_ref()]);
                     }
                     _ => {
                         self.move_(path.file_name()).ok();
                     }
-                },
-                None => {}
+                }
             }
         }
         let o_p = if cfg!(test) {
