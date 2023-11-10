@@ -1,6 +1,6 @@
 use super::error::{bmc_error, BmcResult};
-use super::Model;
-use crate::task::Task;
+use super::{Model, Task};
+use crate::task::{new_task, TaskExe, TaskResult};
 
 use snafu::OptionExt;
 use std::sync::Arc;
@@ -8,8 +8,7 @@ use tokio::sync::mpsc;
 use tokio::sync::oneshot::{self, Sender as OnceSender};
 use uuid::Uuid;
 
-type CreateResult = Result<Arc<Task>, crate::task::TaskError>;
-type Message = Option<(String, OnceSender<CreateResult>)>;
+type Message = Option<(String, OnceSender<TaskResult<Task>>)>;
 
 pub struct TaskBmc {
     model: Model,
@@ -24,7 +23,7 @@ macro_rules! bmc_func {
                 .model
                 .tasks
                 .iter()
-                .find(|t| t.id == id)
+                .find(|t| *t.id() == id)
                 .context(bmc_error::TaskNotFoundError { id })?
                 .clone();
             task.$func()?;
@@ -36,6 +35,9 @@ macro_rules! bmc_func {
     }
 }
 
+/// title finished total id status
+pub type Process = (String, usize, usize, String, String);
+
 impl TaskBmc {
     pub fn new() -> Self {
         let (tx, mut rx) = mpsc::channel::<Message>(8);
@@ -43,7 +45,7 @@ impl TaskBmc {
             actix_rt::Runtime::new().unwrap().block_on(async move {
                 let mut jhs = Vec::new();
                 while let Some(Some((url, tx))) = rx.recv().await {
-                    let task = Task::new(url);
+                    let task = new_task(url);
                     match task {
                         Ok(task) => {
                             let task = Arc::new(task);
@@ -73,12 +75,12 @@ impl TaskBmc {
     where
         S: AsRef<str>,
     {
-        let (tx, rx) = oneshot::channel::<CreateResult>();
+        let (tx, rx) = oneshot::channel::<TaskResult<Task>>();
         self.tx
             .blocking_send(Some((url.as_ref().to_string(), tx)))
             .unwrap();
         let new_task = rx.blocking_recv().unwrap()?;
-        let uuid = new_task.id;
+        let uuid = *new_task.id();
         self.model.tasks.push(new_task);
         Ok(uuid)
     }
@@ -88,7 +90,7 @@ impl TaskBmc {
             .model
             .tasks
             .iter()
-            .position(|t| t.id == id)
+            .position(|t| *t.id() == id)
             .context(bmc_error::TaskNotFoundError { id })?;
         self.model.tasks[i].cancel()?;
         self.model.tasks.swap_remove(i);
@@ -96,11 +98,11 @@ impl TaskBmc {
     }
 
     // return (title finished total uuid state)
-    pub fn progress(&self) -> BmcResult<Vec<(String, usize, usize, String, String)>> {
+    pub fn progress(&self) -> BmcResult<Vec<Process>> {
         let mut ret = vec![];
         for t in self.model.tasks.iter() {
             let (filname, finished, total, state) = t.progress_query().unwrap();
-            ret.push((filname, finished, total, t.id.to_string(), state));
+            ret.push((filname, finished, total, t.id().to_string(), state));
         }
         Ok(ret)
     }

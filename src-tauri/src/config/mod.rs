@@ -124,7 +124,7 @@ impl KeySource {
         std::fs::create_dir_all(&config_dir).unwrap();
         let encrypter = encrypt::Encrypter::from_key_ring()?;
         for (filename, data) in self.inner.iter() {
-            if data.to_string().len() == 0 {
+            if data.to_string().is_empty() {
                 std::fs::remove_file(config_dir.join(filename)).ok();
                 continue;
             }
@@ -150,13 +150,13 @@ impl Source for KeySource {
     }
 }
 
-impl<K, V> Into<KeySource> for HashSet<(K, V)>
+impl<K, V> From<HashMap<K, V>> for KeySource
 where
     K: AsRef<str>,
     V: Into<ValueKind>,
 {
-    fn into(self) -> KeySource {
-        let inner = self
+    fn from(hm: HashMap<K, V>) -> Self {
+        let inner = hm
             .into_iter()
             .map(|(k, v)| (k.as_ref().to_owned(), config::Value::new(None, v.into())))
             .collect();
@@ -164,13 +164,13 @@ where
     }
 }
 
-impl<K, V> Into<KeySource> for HashMap<K, V>
+impl<K, V> From<HashSet<(K, V)>> for KeySource
 where
     K: AsRef<str>,
     V: Into<ValueKind>,
 {
-    fn into(self) -> KeySource {
-        let inner = self
+    fn from(hs: HashSet<(K, V)>) -> Self {
+        let inner = hs
             .into_iter()
             .map(|(k, v)| (k.as_ref().to_owned(), config::Value::new(None, v.into())))
             .collect();

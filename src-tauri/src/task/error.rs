@@ -6,6 +6,8 @@ use snafu::prelude::*;
 pub enum TaskError {
     #[snafu(display("Could not parse url"), context(false))]
     ParseUrl { source: url::ParseError },
+    #[snafu(display("Could not parse bvid"), context(suffix(false)))]
+    BvidNotFound,
     #[snafu(display("Maybe network disconnected"), context(false))]
     GetError { source: ReqwestError },
     #[snafu(context(false))]
@@ -15,7 +17,7 @@ pub enum TaskError {
     #[snafu(context(suffix(false)))]
     UnknownTaskType,
     #[snafu(context(suffix(false)))]
-    ConfigNotFound {},
+    ConfigNotFound,
     #[snafu(context(false))]
     SaveError { source: ActorError },
     #[snafu(context(false))]
@@ -29,10 +31,10 @@ pub type TaskResult<T> = Result<T, TaskError>;
 pub enum ParseError {
     #[snafu(context(suffix(false)))]
     NoTargetFound,
-    #[snafu()]
-    JsonParseError { source: serde_json::error::Error },
+    #[snafu(context(false))]
+    JsonParse { source: serde_json::error::Error },
     #[snafu(context(suffix(false)))]
-    BiliPlayInfoNotFound,
+    InfoNotFound,
 }
 
 pub type ParseResult<T> = Result<T, ParseError>;
