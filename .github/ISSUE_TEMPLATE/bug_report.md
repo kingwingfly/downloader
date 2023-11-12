@@ -7,7 +7,7 @@ assignees: ''
 
 ---
 **Version**
-[ ] Have you use the latest version of the project?
+- [ ] Have you use the latest version of the project?
 
 **Describe the bug**
 A clear and concise description of what the bug is.
