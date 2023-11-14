@@ -68,7 +68,7 @@
 
 [![Product Name Screen Shot][product-screenshot]](https://example.com)
 
-This is a downloader, I have implemented bilibili download now. This downloader is easy to secondary development, you just need impl parser for the website you want to download in parser.rs.
+This is a downloader, I have implemented bilibili download now. This downloader is easy to secondary development, you just need impl `TaskExe` for the website you want to download.
 
 The config or the cookies you store in this app will be encrypted by `rsa`, and the private key will be store using `keyring` in your system's key keeper (such as key-chain on macOS).
 
